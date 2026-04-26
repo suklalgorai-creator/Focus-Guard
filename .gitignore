@@ -6,9 +6,14 @@ keystore/
 .gradle-user-home/
 build/
 app/build/
+app/release/
 .idea/
 .vscode/
 *.log
+*.apk
+*.aab
+*.ap_
+*.dm
 hs_err_pid*
 replay_pid*
 frictionguard.zip
