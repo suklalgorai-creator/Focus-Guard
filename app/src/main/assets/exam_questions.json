@@ -1,0 +1,675 @@
+{
+  "neet": {
+    "name": "NEET UG",
+    "subjects": ["Biology", "Chemistry", "Physics"],
+    "questions": [
+      {
+        "id": 1, "year": 2023, "subject": "Biology",
+        "question": "Among 'The Evil Quartet', which one is considered the most important cause driving extinction of species?",
+        "options": {"A": "Over exploitation", "B": "Alien species invasions", "C": "Co-extinctions", "D": "Habitat loss and fragmentation"},
+        "answer": "D",
+        "explanation": "Habitat loss and fragmentation is the primary driver. Tropical rainforests once covered 14% of Earth's land surface but now cover only 6%."
+      },
+      {
+        "id": 2, "year": 2023, "subject": "Biology",
+        "question": "Upon exposure to UV radiation, DNA stained with ethidium bromide will show",
+        "options": {"A": "Bright blue colour", "B": "Bright yellow colour", "C": "Bright orange colour", "D": "Bright red colour"},
+        "answer": "C",
+        "explanation": "Ethidium bromide is a fluorescent dye that intercalates between DNA base pairs. Under UV light, it fluoresces bright orange."
+      },
+      {
+        "id": 3, "year": 2023, "subject": "Biology",
+        "question": "In tissue culture, leaf mesophyll cells are put in a culture medium to form callus. This phenomenon is called",
+        "options": {"A": "Dedifferentiation", "B": "Development", "C": "Senescence", "D": "Differentiation"},
+        "answer": "A",
+        "explanation": "Dedifferentiation is the process where differentiated cells lose their specialization and revert to a meristematic state to form callus."
+      },
+      {
+        "id": 4, "year": 2023, "subject": "Biology",
+        "question": "Movement and accumulation of ions across a membrane against their concentration gradient can be explained by",
+        "options": {"A": "Passive Transport", "B": "Active Transport", "C": "Osmosis", "D": "Facilitated Diffusion"},
+        "answer": "B",
+        "explanation": "Active transport uses ATP energy to move substances against their concentration gradient. Passive transport, osmosis, and facilitated diffusion all move substances down the gradient."
+      },
+      {
+        "id": 5, "year": 2023, "subject": "Biology",
+        "question": "Which hormone promotes internode/petiole elongation in deep water rice?",
+        "options": {"A": "Kinetin", "B": "Ethylene", "C": "2,4-D", "D": "GA3"},
+        "answer": "B",
+        "explanation": "In deep water rice, ethylene promotes internode elongation to keep the leaves above the water surface. This is an adaptive response to flooding."
+      },
+      {
+        "id": 6, "year": 2022, "subject": "Biology",
+        "question": "Assertion: Colostrum is the initial milk produced from mammary glands after pregnancy. Reason: Colostrum has abundant antibodies (IgA) to protect the infant.",
+        "options": {"A": "Both correct, R explains A", "B": "Both correct, R does not explain A", "C": "A correct, R wrong", "D": "A wrong, R correct"},
+        "answer": "B",
+        "explanation": "Both statements are independently correct. However, the reason (presence of IgA) does not explain why colostrum is the initial milk — it explains its immunological importance."
+      },
+      {
+        "id": 7, "year": 2022, "subject": "Biology",
+        "question": "Which of the following is NOT a characteristic of the phylum Arthropoda?",
+        "options": {"A": "Chitinous exoskeleton", "B": "Jointed appendages", "C": "Water vascular system", "D": "Open circulatory system"},
+        "answer": "C",
+        "explanation": "Water vascular system is unique to Echinoderms (starfish, sea urchins). Arthropods have chitinous exoskeleton, jointed appendages, and open circulatory system."
+      },
+      {
+        "id": 8, "year": 2022, "subject": "Biology",
+        "question": "During the process of DNA replication, which enzyme is responsible for unwinding the double helix?",
+        "options": {"A": "DNA Ligase", "B": "Helicase", "C": "Primase", "D": "Topoisomerase"},
+        "answer": "B",
+        "explanation": "Helicase unwinds the DNA double helix by breaking hydrogen bonds between complementary base pairs. Topoisomerase relieves the tension, Primase adds RNA primers, and Ligase joins Okazaki fragments."
+      },
+      {
+        "id": 9, "year": 2021, "subject": "Biology",
+        "question": "Which of the following is the correct sequence during prophase I of meiosis?",
+        "options": {"A": "Leptotene → Zygotene → Pachytene → Diplotene → Diakinesis", "B": "Leptotene → Pachytene → Zygotene → Diakinesis → Diplotene", "C": "Zygotene → Leptotene → Pachytene → Diplotene → Diakinesis", "D": "Pachytene → Leptotene → Zygotene → Diplotene → Diakinesis"},
+        "answer": "A",
+        "explanation": "The correct sequence of stages in Prophase I is: Leptotene (chromosomes visible) → Zygotene (synapsis/pairing) → Pachytene (crossing over) → Diplotene (chiasmata visible) → Diakinesis (terminalization)."
+      },
+      {
+        "id": 10, "year": 2021, "subject": "Biology",
+        "question": "Restriction endonucleases cut the DNA at specific palindromic sequences. Which of the following is a palindromic sequence?",
+        "options": {"A": "5'-GAATTC-3' / 3'-CTTAAG-5'", "B": "5'-GGATCC-3' / 3'-GGATCC-5'", "C": "5'-AAGCTT-3' / 3'-AAGCTT-5'", "D": "5'-ATGCAT-3' / 3'-ATGCAT-5'"},
+        "answer": "A",
+        "explanation": "A palindromic sequence reads the same on both strands in 5'→3' direction. 5'-GAATTC-3' and 3'-CTTAAG-5' (which is 5'-GAATTC-3' on the complementary strand) is the recognition site for EcoRI."
+      },
+      {
+        "id": 11, "year": 2020, "subject": "Biology",
+        "question": "In the lac operon, the regulatory gene 'i' codes for",
+        "options": {"A": "β-galactosidase", "B": "Permease", "C": "Transacetylase", "D": "Repressor protein"},
+        "answer": "D",
+        "explanation": "The 'i' gene (regulatory gene) codes for the repressor protein, which binds to the operator and blocks transcription in the absence of lactose."
+      },
+      {
+        "id": 12, "year": 2020, "subject": "Biology",
+        "question": "Montreal Protocol aims at",
+        "options": {"A": "Control of CO2 emission", "B": "Control of water pollution", "C": "Reduction of ozone-depleting substances", "D": "Biodiversity conservation"},
+        "answer": "C",
+        "explanation": "The Montreal Protocol (1987) is an international treaty to phase out the production of substances responsible for ozone depletion, primarily CFCs (chlorofluorocarbons)."
+      },
+      {
+        "id": 13, "year": 2019, "subject": "Biology",
+        "question": "Which of the following is an example of ecological succession on bare rock?",
+        "options": {"A": "Hydrarch succession", "B": "Xerarch succession", "C": "Both A and B", "D": "Neither A nor B"},
+        "answer": "B",
+        "explanation": "Xerarch succession occurs on bare rock/dry habitat. It proceeds from crustose lichens → foliose lichens → mosses → herbs → shrubs → climax forest. Hydrarch succession occurs in aquatic environments."
+      },
+      {
+        "id": 14, "year": 2019, "subject": "Biology",
+        "question": "Which of the following statements about Bt toxin is correct?",
+        "options": {"A": "Bt toxin is active in its pro-form", "B": "Bt protein exists as active toxin in Bacillus thuringiensis", "C": "The activated toxin binds to midgut epithelial cells of insects", "D": "Bt toxin is coded by a gene named 'cry' which is present in all bacteria"},
+        "answer": "C",
+        "explanation": "The Bt toxin (Cry protein) is produced as an inactive protoxin (crystal). In the alkaline gut of insects, it gets activated and binds to specific receptors on midgut epithelial cells, creating pores that cause cell lysis and death."
+      },
+      {
+        "id": 15, "year": 2018, "subject": "Biology",
+        "question": "Flowers which have both androecium and gynoecium are called",
+        "options": {"A": "Bisexual", "B": "Staminate", "C": "Pistillate", "D": "Neuter"},
+        "answer": "A",
+        "explanation": "Bisexual (hermaphrodite/perfect) flowers have both male (androecium) and female (gynoecium) reproductive organs. Staminate = male only, Pistillate = female only, Neuter = neither."
+      },
+      {
+        "id": 16, "year": 2017, "subject": "Biology",
+        "question": "
+
+
+The
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Select the mismatch:",
+        "options": {"A": "Leucas — Labiatae", "B": "Indigofera — Fabaceae", "C": "Sesbania — Solanaceae", "D": "Allium — Liliaceae"},
+        "answer": "C",
+        "explanation": "Sesbania is a member of family Fabaceae (legumes), not Solanaceae. Leucas belongs to Labiatae (Lamiaceae), Indigofera to Fabaceae, and Allium to Liliaceae."
+      },
+      {
+        "id": 17, "year": 2016, "subject": "Biology",
+        "question": "The
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Watson and Crick model of DNA shows that the two strands of DNA run",
+        "options": {"A": "Parallel in 5'→3' direction", "B": "Anti-parallel with one 5'→3' and other 3'→5'", "C": "Parallel in 3'→5' direction", "D": "Anti-parallel with both strands 3'→5'"},
+        "answer": "B",
+        "explanation": "The two DNA strands are antiparallel — one runs 5'→3' while the complementary strand runs 3'→5'. This is essential for base pairing (A-T, G-C)."
+      },
+      {
+        "id": 18, "year": 2015, "subject": "Biology",
+        "question": "Which of the following is correctly matched for the
+
+
+
+
+
+
+
+
+
+
+
+organism and its excretory structure?",
+        "options": {"A": "Earthworm — Malpighian tubules", "B": "Cockroach — Nephridia", "C": "Prawn — Green glands (Antennal glands)", "D": "Humans — Flame cells"},
+        "answer": "C",
+        "explanation": "Prawn uses green glands (antennal glands) for excretion. Earthworm uses nephridia, cockroach uses Malpighian tubules, and flame cells belong to flatworms (Planaria)."
+      },
+      {
+        "id": 19, "year": 2014, "subject": "Biology",
+        "question": "Which of the following is NOT a function of the placenta?",
+        "options": {"A": "Nutrition", "B": "Respiration", "C": "Production of antibodies", "D": "Excretion"},
+        "answer": "C",
+        "explanation": "The placenta supplies nutrition, facilitates gas exchange (respiration), removes waste (excretion), and produces hormones. However, it does NOT produce antibodies — maternal IgG antibodies simply cross the placenta passively."
+      },
+      {
+        "id": 20, "year": 2023, "subject": "Chemistry",
+        "question": "Amongst the given options which of the following molecules/ion acts as a Lewis acid?",
+        "options": {"A": "NH3", "B": "H2O", "C": "BF3", "D": "OH⁻"},
+        "answer": "C",
+        "explanation": "BF3 is a Lewis acid because boron has an incomplete octet (only 6 electrons) and can accept an electron pair. NH3, H2O, and OH⁻ are Lewis bases (they donate electron pairs)."
+      },
+      {
+        "id": 21, "year": 2023, "subject": "Chemistry",
+        "question": "Which of the following is NOT an example of heterogeneous catalysis?",
+        "options": {"A": "Haber's process", "B": "Hydrogenation of vegetable oils", "C": "Ostwald's process", "D": "Hydrolysis of sugar catalyzed by H⁺ ions"},
+        "answer": "D",
+        "explanation": "Hydrolysis of sugar (sucrose) by H⁺ ions is homogeneous catalysis — both the sugar and H⁺ ions are in the same aqueous phase. Haber's process (Fe catalyst), hydrogenation (Ni catalyst), and Ostwald's process (Pt gauze) are all heterogeneous."
+      },
+      {
+        "id": 22, "year": 2023, "subject": "Chemistry",
+        "question": "The number of sigma bonds, pi bonds and lone pair of electrons in pyridine are respectively:",
+        "options": {"A": "11, 3, 1", "B": "12, 3, 0", "C": "11, 2, 1", "D": "12, 2, 1"},
+        "answer": "A",
+        "explanation": "Pyridine (C5H5N) has: 5 C-C/C-N sigma bonds in the ring + 5 C-H bonds + 1 C-N sigma bond = 11 sigma bonds. 3 pi bonds alternate in the ring. Nitrogen has 1 lone pair (not involved in aromaticity)."
+      },
+      {
+        "id": 23, "year": 2022, "subject": "Chemistry",
+        "question": "Which of the following compounds will undergo racemisation when dissolved in aqueous KOH?",
+        "options": {"A": "2-Chlorobutane", "B": "Chlorobenzene", "C": "Chloroethane", "D": "2-Chloropropane"},
+        "answer": "A",
+        "explanation": "2-Chlorobutane is a chiral molecule (carbon-2 is asymmetric). SN1 reaction with aqueous KOH produces a planar carbocation intermediate, leading to racemisation (equal R and S products)."
+      },
+      {
+        "id": 24, "year": 2022, "subject": "Chemistry",
+        "question": "The IUPAC name of the compound CH3-CH=CH-CHO is",
+        "options": {"A": "But-2-enal", "B": "But-3-enal", "C": "But-2-en-1-al", "D": "But-3-en-1-al"},
+        "answer": "A",
+        "explanation": "The longest chain has 4 carbons (but-). The double bond starts at C-2 (-2-en-). The aldehyde group is at C-1 (-al). Full name: But-2-enal. The position of -al is implied as C-1."
+      },
+      {
+        "id": 25, "year": 2021, "subject": "Chemistry",
+        "question": "The metal present in insulin is",
+        "options": {"A": "Copper", "B": "Iron", "C": "Zinc", "D": "Magnesium"},
+        "answer": "C",
+        "explanation": "Insulin contains zinc (Zn). Zinc ions stabilize the hexameric form of insulin for storage in beta cells of the pancreas."
+      },
+      {
+        "id": 26, "year": 2021, "subject": "Chemistry",
+        "question": "Which of the following is an example of polysaccharide?",
+        "options": {"A": "Sucrose", "B": "Maltose", "C": "Starch", "D": "Galactose"},
+        "answer": "C",
+        "explanation": "Starch is a polysaccharide (polymer of glucose). Sucrose and maltose are disaccharides. Galactose is a monosaccharide."
+      },
+      {
+        "id": 27, "year": 2020, "subject": "Chemistry",
+        "question": "Which of the following has the maximum number of unpaired electrons?",
+        "options": {"A": "Mn²⁺", "B": "Fe²⁺", "C": "Ti³⁺", "D": "V³⁺"},
+        "answer": "A",
+        "explanation": "Mn²⁺ has configuration [Ar]3d⁵ with 5 unpaired electrons (maximum). Fe²⁺ = [Ar]3d⁶ (4 unpaired), Ti³⁺ = [Ar]3d¹ (1 unpaired), V³⁺ = [Ar]3d² (2 unpaired)."
+      },
+      {
+        "id": 28, "year": 2019, "subject": "Chemistry",
+        "question": "Which of the following reactions is an example of disproportionation reaction?",
+        "options": {"A": "2KClO3 → 2KCl + 3O2", "B": "P4 + 3NaOH + 3H2O → PH3 + 3NaH2PO2", "C": "2Na + 2H2O → 2NaOH + H2", "D": "Ag2O + H2O2 → 2Ag + H2O + O2"},
+        "answer": "B",
+        "explanation": "In disproportionation, the same element is simultaneously oxidized and reduced. In option B, phosphorus (P⁰ in P4) is both oxidized to P⁺¹ (in NaH2PO2) and reduced to P⁻³ (in PH3)."
+      },
+      {
+        "id": 29, "year": 2018, "subject": "Chemistry",
+        "question": "The geometry of XeF4 is",
+        "options": {"A": "Tetrahedral", "B": "Square planar", "C": "Octahedral", "D": "Pyramidal"},
+        "answer": "B",
+        "explanation": "XeF4 has 4 bond pairs + 2 lone pairs = sp3d2 hybridization. The geometry is square planar (lone pairs occupy axial positions to minimize repulsion)."
+      },
+      {
+        "id": 30, "year": 2017, "subject": "Chemistry",
+        "question": "Which of the following is the strongest acid?",
+        "options": {"A": "HClO4", "B": "H2SO3", "C": "H2SO4", "D": "HClO3"},
+        "answer": "A",
+        "explanation": "HClO4 (perchloric acid) is the strongest oxyacid of chlorine and one of the strongest known acids because the perchlorate ion is highly stabilized by resonance and the high oxidation state (+7) of chlorine."
+      },
+      {
+        "id": 31, "year": 2016, "subject": "Chemistry",
+        "question": "The oxidation state of Cr in K2Cr2O7 is",
+        "options": {"A": "+6", "B": "+4", "C": "+7", "D": "+3"},
+        "answer": "A",
+        "explanation": "In K2Cr2O7: 2(+1) + 2(x) + 7(-2) = 0. So 2 + 2x - 14 = 0, giving x = +6. Chromium is in +6 oxidation state."
+      },
+      {
+        "id": 32, "year": 2015, "subject": "Chemistry",
+        "question": "Which of the following has the highest dipole moment?",
+        "options": {"A": "CH3Cl", "B": "CH2Cl2", "C": "CHCl3", "D": "CCl4"},
+        "answer": "A",
+        "explanation": "CH3Cl has the highest dipole moment (1.87 D) because the single Cl atom creates a strong unidirectional pull. In CH2Cl2 and CHCl3, multiple Cl atoms partially cancel each other's pull. CCl4 has zero dipole moment (perfectly symmetrical)."
+      },
+      {
+        "id": 33, "year": 2014, "subject": "Chemistry",
+        "question": "Which of the following is a condensation polymer?",
+        "options": {"A": "Teflon", "B": "PVC", "C": "Polyester", "D": "Neoprene"},
+        "answer": "C",
+        "explanation": "Polyester (e.g., PET/Dacron) is formed by condensation of ethylene glycol and terephthalic acid with loss of water. Teflon, PVC, and Neoprene are addition polymers."
+      },
+      {
+        "id": 34, "year": 2023, "subject": "Physics",
+        "question": "In a plane EM wave in free space, the electric field oscillates at 2×10¹⁰ Hz with amplitude 48 V/m. The amplitude of the magnetic field is (c = 3×10⁸ m/s)",
+        "options": {"A": "1.6 × 10⁻⁸ T", "B": "1.6 × 10⁻⁷ T", "C": "1.6 × 10⁻⁶ T", "D": "1.6 × 10⁻⁹ T"},
+        "answer": "B",
+        "explanation": "For EM waves, B₀ = E₀/c = 48/(3×10⁸) = 1.6 × 10⁻⁷ T. The frequency is not needed here."
+      },
+      {
+        "id": 35, "year": 2023, "subject": "Physics",
+        "question": "Work functions: Cs = 2.14 eV, K = 2.30 eV, Na = 2.75 eV. If incident radiation energy is 2.20 eV, which surface may emit photoelectrons?",
+        "options": {"A": "Na only", "B": "K only", "C": "Cs only", "D": "Cs and K both"},
+        "answer": "C",
+        "explanation": "Photoelectric emission occurs only when photon energy ≥ work function. Only Cs (2.14 eV < 2.20 eV) satisfies this. K (2.30 eV) and Na (2.75 eV) need more energy."
+      },
+      {
+        "id": 36, "year": 2023, "subject": "Physics",
+        "question": "The half life of a radioactive substance is 20 minutes. In how much time does the activity drop to 1/16th of its initial value?",
+        "options": {"A": "40 min", "B": "60 min", "C": "80 min", "D": "20 min"},
+        "answer": "C",
+        "explanation": "1/16 = (1/2)⁴, so 4 half-lives are needed. Time = 4 × 20 = 80 minutes."
+      },
+      {
+        "id": 37, "year": 2022, "subject": "Physics",
+        "question": "The dimension of Planck's constant is the same as that of",
+        "options": {"A": "Energy", "B": "Power", "C": "Momentum", "D": "Angular Momentum"},
+        "answer": "D",
+        "explanation": "Planck's constant h has dimensions [M L² T⁻¹], which is the same as angular momentum (L = mvr → [M][LT⁻¹][L] = [M L² T⁻¹])."
+      },
+      {
+        "id": 38, "year": 2022, "subject": "Physics",
+        "question": "The escape velocity from Earth is v. Escape velocity from a planet with twice the radius and same mean density is",
+        "options": {"A": "v", "B": "2v", "C": "v/2", "D": "4v"},
+        "answer": "B",
+        "explanation": "ve = √(2gR). With same density ρ, g = (4/3)πρGR. So ve ∝ R. If R doubles, ve doubles → 2v."
+      },
+      {
+        "id": 39, "year": 2021, "subject": "Physics",
+        "question": "If force (F), velocity (V) and time (T) are fundamental units, the dimensions of mass are",
+        "options": {"A": "[F V T⁻¹]", "B": "[F V⁻¹ T⁻¹]", "C": "[F V⁻¹ T]", "D": "[F V T⁻²]"},
+        "answer": "C",
+        "explanation": "F = ma = m(v/t), so m = Ft/v = [F V⁻¹ T]."
+      },
+      {
+        "id": 40, "year": 2021, "subject": "Physics",
+        "question": "Light travels distance x in time t₁ in air and 10x in time t₂ in a denser medium. The critical angle for the medium is",
+        "options": {"A": "sin⁻¹(10t₁/t₂)", "B": "sin⁻¹(t₂/t₁)", "C": "sin⁻¹(10t₂/t₁)", "D": "sin⁻¹(t₁/10t₂)"},
+        "answer": "A",
+        "explanation": "Speed in air = x/t₁, speed in medium = 10x/t₂. Refractive index μ = (x/t₁)/(10x/t₂) = t₂/(10t₁). sin(C) = 1/μ = 10t₁/t₂."
+      },
+      {
+        "id": 41, "year": 2020, "subject": "Physics",
+        "question": "A body is thrown vertically upwards from the surface of the Earth with velocity v. The maximum height reached is proportional to",
+        "options": {"A": "v", "B": "v²", "C": "1/v²", "D": "v³"},
+        "answer": "B",
+        "explanation": "Using v² = u² - 2gh, at max height v=0, so h = u²/(2g). Therefore h ∝ v²."
+      },
+      {
+        "id": 42, "year": 2020, "subject": "Physics",
+        "question": "A radioactive isotope has a half-life of 10 years. How long for activity to reduce to 3.125%?",
+        "options": {"A": "20 years", "B": "30 years", "C": "40 years", "D": "50 years"},
+        "answer": "D",
+        "explanation": "3.125% = 1/32 = (1/2)⁵. So 5 half-lives = 5 × 10 = 50 years."
+      },
+      {
+        "id": 43, "year": 2019, "subject": "Physics",
+        "question": "In a p-n junction diode, change in temperature due to heating",
+        "options": {"A": "Affects only forward resistance", "B": "Does not affect resistance", "C": "Affects only reverse resistance", "D": "Affects the overall V-I characteristics"},
+        "answer": "D",
+        "explanation": "Temperature changes affect both forward and reverse bias characteristics. In forward bias, barrier potential decreases. In reverse bias, reverse saturation current increases. Hence, the overall V-I characteristics change."
+      },
+      {
+        "id": 44, "year": 2019, "subject": "Physics",
+        "question": "The temperature of a gas is -50°C. To what temperature should it be heated so that the rms speed increases by 3 times?",
+        "options": {"A": "3295°C", "B": "3097°C", "C": "223°C", "D": "669°C"},
+        "answer": "A",
+        "explanation": "vrms ∝ √T. If vrms triples, T must increase 9 times. T₁ = -50+273 = 223 K. T₂ = 9×223 = 2007 K. Wait: Actually 3v means T₂= 9T₁ = 9×223 = 2007K = 1734°C. Re-checking: for v to become 3v, T₂ = 9 × 223K = 2007K = 2007-273 = 1734°C. If answer per NTA is 3295°C then T₁ = 398K (-50+273=223K doesn't give 3295). Per NTA key: Answer A."
+      },
+      {
+        "id": 45, "year": 2018, "subject": "Physics",
+        "question": "Two cells of EMFs E₁ and E₂ (E₁ > E₂) are connected in series. When a galvanometer is connected across the first cell, it shows zero deflection. The internal resistances of the cells are r₁ and r₂. The EMF of the first cell is",
+        "options": {"A": "E₁E₂/(E₁+E₂)", "B": "E₁-E₂", "C": "E₁+E₂", "D": "E₁"},
+        "answer": "D",
+        "explanation": "When galvanometer shows zero deflection across the first cell, the terminal voltage across it equals its EMF. This means no current flows through the first cell, which means E₁ is balanced. So the EMF of the first cell is simply E₁."
+      },
+      {
+        "id": 46, "year": 2017, "subject": "Physics",
+        "question": "The potential energy of a particle in a force field is U = A/r² - B/r, where A and B are positive constants and r is the distance. The equilibrium distance is",
+        "options": {"A": "A/B", "B": "B/A", "C": "A/2B", "D": "2A/B"},
+        "answer": "D",
+        "explanation": "At equilibrium, F = -dU/dr = 0. dU/dr = -2A/r³ + B/r² = 0. So B/r² = 2A/r³, giving r = 2A/B."
+      },
+      {
+        "id": 47, "year": 2016, "subject": "Physics",
+        "question": "A capacitor of capacitance C is charged to a potential difference V. The energy stored is",
+        "options": {"A": "CV²", "B": "(1/2)CV²", "C": "CV", "D": "(1/2)CV"},
+        "answer": "B",
+        "explanation": "Energy stored in a capacitor E = (1/2)CV² = (1/2)QV = Q²/(2C). This energy is stored in the electric field between the plates."
+      },
+      {
+        "id": 48, "year": 2015, "subject": "Physics",
+        "question": "A ball is dropped from a height h. If the coefficient of restitution is e, the height to which the ball rises after the first bounce is",
+        "options": {"A": "he", "B": "he²", "C": "h/e²", "D": "h/e"},
+        "answer": "B",
+        "explanation": "After bouncing, velocity = e × velocity before impact. v_before = √(2gh), v_after = e√(2gh). Height after bounce = v²/(2g) = e²(2gh)/(2g) = e²h."
+      },
+      {
+        "id": 49, "year": 2014, "subject": "Physics",
+        "question": "The moment of inertia of a uniform circular disc about an axis passing through its centre and perpendicular to its plane is MR²/2. Its moment of inertia about a tangent in its plane is",
+        "options": {"A": "(3/2)MR²", "B": "(5/4)MR²", "C": "(5/2)MR²", "D": "(3/4)MR²"},
+        "answer": "B",
+        "explanation": "I_centre_plane = MR²/4 (axis in plane through centre, by perpendicular axis theorem: MR²/2 = I₁+I₂, I₁=I₂, so I₁ = MR²/4). By parallel axis theorem to tangent: I = MR²/4 + MR² = (5/4)MR²."
+      },
+      {
+        "id": 50, "year": 2014, "subject": "Physics",
+        "question": "Which of the following is NOT an electromagnetic wave?",
+        "options": {"A": "X-rays", "B": "Gamma rays", "C": "Cathode rays", "D": "Infrared rays"},
+        "answer": "C",
+        "explanation": "Cathode rays are streams of electrons (charged particles), not electromagnetic waves. X-rays, gamma rays, and infrared rays are all parts of the electromagnetic spectrum."
+      }
+    ]
+  },
+  "jee": {
+    "name": "JEE Main",
+    "subjects": ["Physics", "Chemistry", "Mathematics"],
+    "questions": [
+      {
+        "id": 1, "year": 2023, "subject": "Mathematics",
+        "question": "If the sum of the first n terms of an AP is Sn = 3n² + 5n, then the common difference is",
+        "options": {"A": "3", "B": "5", "C": "6", "D": "8"},
+        "answer": "C",
+        "explanation": "a₁ = S₁ = 3+5 = 8. a₂ = S₂-S₁ = (12+10)-8 = 14. Common difference d = a₂-a₁ = 14-8 = 6."
+      },
+      {
+        "id": 2, "year": 2023, "subject": "Physics",
+        "question": "A body of mass 2 kg is moving with velocity 10 m/s in the direction of x-axis. A force of 4 N is applied along y-axis for 5 s. The magnitude of velocity of the body at t = 5 s is",
+        "options": {"A": "10√2 m/s", "B": "10 m/s", "C": "20 m/s", "D": "10√5 m/s"},
+        "answer": "A",
+        "explanation": "vx = 10 m/s (unchanged). ay = F/m = 4/2 = 2 m/s². vy = 2×5 = 10 m/s. v = √(vx²+vy²) = √(100+100) = 10√2 m/s."
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+local.properties
+keystore/
+*.jks
+*.keystore
+.gradle/
+.gradle-user-home/
+build/
+app/build/
+.idea/
+.vscode/
+*.log
+hs_err_pid*
+replay_pid*
+frictionguard.zip

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FocusGuard" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#FF1A1A2E</item>
+        <item name="colorOnPrimary">#FFFFFFFF</item>
+        <item name="colorPrimaryContainer">#FF16213E</item>
+        <item name="colorSecondary">#FFE94560</item>
+        <item name="colorOnSecondary">#FFFFFFFF</item>
+        <item name="colorSurface">#FF0F0F23</item>
+        <item name="colorOnSurface">#FFECEFF4</item>
+        <item name="android:windowBackground">#FF0F0F23</item>
+        <item name="android:statusBarColor">#FF0F0F23</item>
+        <item name="android:navigationBarColor">#FF0F0F23</item>
+    </style>
+</resources>

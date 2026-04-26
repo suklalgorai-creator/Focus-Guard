@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Focus Guard</string>
+    <string name="accessibility_service_description">Focus Guard uses Accessibility to detect foreground apps and may inspect visible screen structure to identify distracting surfaces such as short-form video feeds. This data is used only on your device for blocking and focus protection.</string>
+    <string name="notification_service_title">Focus Guard Active</string>
+    <string name="notification_service_text">Protecting your focus. Stay strong.</string>
+</resources>
