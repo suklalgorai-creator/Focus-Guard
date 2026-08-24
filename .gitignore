@@ -9,9 +9,7 @@ keystore/
 .android-home/
 .android-local/
 .jdk/
-apk-audit/
-apktool-framework/
-frictionguard-perfect-decompiled/
+legacy-audit/
 build/
 app/build/
 app/release/
@@ -24,8 +22,7 @@ app/release/
 *.dm
 hs_err_pid*
 replay_pid*
-frictionguard.zip
-tools/
 .agents/
+
 .gemini/
 *.idsig
