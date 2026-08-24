@@ -8,78 +8,78 @@ import kotlinx.coroutines.*
 import kotlin.random.Random
 
 /**
- * LAYER 4: Intentional Failure Injection
+ * LAYER 4: Focus Check Reset
  *
- * Randomly fails the user even after they've completed everything correctly.
- * Shows fake error messages and sends them back to restart the pipeline.
+ * Randomly restarts the flow after the user completes a step.
+ * Copy stays honest so the blocker does not look broken or scammy.
  *
  * Failure probability scales with escalation:
- * - Level 0: 20% chance
- * - Level 1: 35% chance
- * - Level 2: 45% chance
- * - Level 3+: 55% chance
+ * - Level 0: 10% chance
+ * - Level 1: 20% chance
+ * - Level 2: 30% chance
+ * - Level 3+: 35% chance
  *
- * This is psychologically devastating because success feels random,
- * which destroys the reward anticipation loop.
+ * Random success reduces the reward loop without pretending an external system failed.
  */
 class FailureInjectionLayer : FrictionLayer {
 
-    override val name = "Failure Injection"
+    override val name = "Focus Check Reset"
 
-    private val fakeErrors = listOf(
-        FakeError(
-            "Connection Lost",
-            "Unable to verify your session. The connection was interrupted.\nRetrying from the beginning...",
+    private val restartReasons = listOf(
+        RestartReason(
+            "Focus Check Reset",
+            "Focus mode is still active.\nRestarting the check.",
             delayMs = 3000
         ),
-        FakeError(
-            "Session Expired",
-            "Your verification session has timed out.\nPlease start over.",
+        RestartReason(
+            "Pause Extended",
+            "Taking a little more time before access.\nPlease start over.",
             delayMs = 2500
         ),
-        FakeError(
-            "Server Timeout",
-            "The verification server did not respond in time.\nReconnecting...",
+        RestartReason(
+            "Intent Check Needed",
+            "Your session needs one more focus check.\nRestarting now.",
             delayMs = 4000
         ),
-        FakeError(
-            "Verification Failed",
-            "Your responses could not be validated.\nPlease try again.",
+        RestartReason(
+            "Block Still Active",
+            "The blocked app is still within focus time.\nPlease try again.",
             delayMs = 2000
         ),
-        FakeError(
-            "Integrity Check Failed",
-            "System detected an inconsistency in your session.\nRestarting verification...",
+        RestartReason(
+            "Another Step Required",
+            "One more step is required before leaving focus mode.",
             delayMs = 3500
         ),
-        FakeError(
-            "Access Token Invalid",
-            "Your access token was revoked.\nRe-authentication required.",
+        RestartReason(
+            "Session Still Locked",
+            "Focus Guard is keeping this session locked.",
             delayMs = 3000
         ),
-        FakeError(
-            "Rate Limited",
-            "Too many verification attempts. Please wait and try again.",
+        RestartReason(
+            "Cooling Down",
+            "Too many distraction attempts.\nWait and try again.",
             delayMs = 5000
         ),
-        FakeError(
-            "Sync Error",
-            "Failed to sync with the accountability server.\nRolling back progress...",
+        RestartReason(
+            "Progress Reset",
+            "The check is restarting so you can return to focus.",
             delayMs = 4000
         ),
     )
 
     override suspend fun execute(context: FrictionContext): FrictionResult {
-        val failureChance = calculateFailureChance(context.escalationLevel)
-
-        // Roll the dice
-        if (Random.nextFloat() > failureChance) {
-            // Lucky — no failure injection this time
+        if (context.attemptNumber <= 1) {
             return FrictionResult.Passed
         }
 
-        // FAILURE TRIGGERED — show fake error
-        val error = fakeErrors[Random.nextInt(fakeErrors.size)]
+        val failureChance = calculateFailureChance(context.escalationLevel)
+
+        if (Random.nextFloat() > failureChance) {
+            return FrictionResult.Passed
+        }
+
+        val reason = restartReasons[Random.nextInt(restartReasons.size)]
 
         return withContext(Dispatchers.Main) {
             val view = context.overlayView
@@ -94,45 +94,42 @@ class FailureInjectionLayer : FrictionLayer {
             view.findViewById<View>(R.id.btn_submit)?.visibility = View.GONE
             view.findViewById<View>(R.id.text_countdown)?.visibility = View.GONE
 
-            // Show fake error with dramatic effect
+            // Show reset state.
             progressBar?.apply {
                 visibility = View.VISIBLE
                 max = 100
                 progress = 100
             }
 
-            // Brief "success" tease before error
-            primaryText?.text = "Almost there..."
+            primaryText?.text = "Focus check in progress..."
             primaryText?.setTextColor(0xFF4CAF50.toInt())
-            delay(1500) // Build false hope
+            delay(1500)
 
-            // CRASH — show error
-            primaryText?.text = "⚠ ${error.title}"
+            primaryText?.text = reason.title
             primaryText?.setTextColor(0xFFE94560.toInt())
-            secondaryText?.text = error.message
+            secondaryText?.text = reason.message
             progressBar?.progress = 0
 
-            // Dramatic wait
-            delay(error.delayMs)
+            delay(reason.delayMs)
 
             // Reset colors
             primaryText?.setTextColor(0xFFECEFF4.toInt())
             progressBar?.visibility = View.GONE
 
-            FrictionResult.Restart // Send user back to beginning
+            FrictionResult.Restart
         }
     }
 
     private fun calculateFailureChance(escalationLevel: Int): Float {
         return when (escalationLevel) {
-            0 -> 0.20f
-            1 -> 0.35f
-            2 -> 0.45f
-            else -> 0.55f
+            0 -> 0.10f
+            1 -> 0.20f
+            2 -> 0.30f
+            else -> 0.35f
         }
     }
 
-    private data class FakeError(
+    private data class RestartReason(
         val title: String,
         val message: String,
         val delayMs: Long

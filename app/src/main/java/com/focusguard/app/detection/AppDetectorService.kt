@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.focusguard.app.FocusGuardApp
+import com.focusguard.app.antibypass.PermissionMonitor
 import com.focusguard.app.antibypass.SettingsBlocker
 import com.focusguard.app.blocking.DetectionSource
 import com.focusguard.app.friction.FrictionOrchestrator
@@ -15,7 +16,7 @@ import com.focusguard.app.overlay.OverlayManager
  *
  * It handles:
  * 1. Full app blocking for blacklisted packages
- * 2. Settings / uninstall anti-bypass monitoring
+ * 2. Focus Guard self-removal protection
  * 3. Focused surface blocking such as Instagram Reels
  */
 class AppDetectorService : AccessibilityService() {
@@ -26,6 +27,7 @@ class AppDetectorService : AccessibilityService() {
     private lateinit var surfaceDetector: BlockedSurfaceDetector
     private lateinit var focusedSurfaceBlocker: FocusedSurfaceBlocker
     private lateinit var foregroundAppDetector: ForegroundAppDetector
+    private lateinit var permissionMonitor: PermissionMonitor
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -45,10 +47,17 @@ class AppDetectorService : AccessibilityService() {
         orchestrator = FrictionOrchestrator(this, overlayManager) { packageName ->
             FocusGuardApp.instance.blockingManager.finishBlocking(packageName)
         }
+        overlayManager.setGlobalExitAction {
+            FocusGuardApp.instance.blockingManager.finishBlocking()
+            orchestrator.onBlockedAppClosed()
+            overlayManager.hide()
+            forceHome()
+        }
         settingsBlocker = SettingsBlocker(this, overlayManager)
         surfaceDetector = BlockedSurfaceDetector(FocusGuardApp.instance.prefs)
         focusedSurfaceBlocker = FocusedSurfaceBlocker(overlayManager)
         foregroundAppDetector = ForegroundAppDetector(this)
+        permissionMonitor = PermissionMonitor(this)
 
         instance = this
         Log.d(TAG, "All components initialized and ready")
@@ -62,7 +71,7 @@ class AppDetectorService : AccessibilityService() {
 
         when (safeEvent.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> handleWindowChange(packageName)
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> handleWindowChange(packageName, safeEvent)
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_CLICKED -> handleContentChange(packageName, safeEvent)
         }
@@ -74,36 +83,55 @@ class AppDetectorService : AccessibilityService() {
     ) {
         val prefs = FocusGuardApp.instance.prefs
 
-        if (isSettingsOrInstallerPackage(packageName) && prefs.canBlockCriticalActions) {
-            settingsBlocker.onSettingsContentChanged(event)
+        if (isSettingsOrInstallerPackage(packageName)) {
+            val allRequiredPermissionsGranted = permissionMonitor.hasAllRequiredPermissions()
+            if (prefs.isPermissionSetupWindowActive() && !allRequiredPermissionsGranted) {
+                Log.d(TAG, "Allowing Settings content during Focus Guard permission setup")
+                return
+            }
+            if (prefs.canBlockSettingsBypassNow &&
+                allRequiredPermissionsGranted
+            ) {
+                settingsBlocker.onSettingsContentChanged(event, rootInActiveWindow)
+            }
             return
         }
 
-        if (!FocusGuardApp.instance.blockingManager.canBlockNow(DetectionSource.ACCESSIBILITY) ||
-            FocusGuardApp.instance.blockingManager.currentBlockedPackage != null) {
+        val blockingManager = FocusGuardApp.instance.blockingManager
+        if (blockingManager.currentBlockedPackage != null) {
             return
         }
+
+        if (blockingManager.canBlockPackageNow(packageName, DetectionSource.ACCESSIBILITY) &&
+            blockingManager.isBlockedPackage(packageName)) {
+            startBlocking(packageName, DetectionSource.ACCESSIBILITY)
+            return
+        }
+
+        if (!blockingManager.canBlockNow(DetectionSource.ACCESSIBILITY)) return
 
         val surfaceMatch = surfaceDetector.detect(event, rootInActiveWindow) ?: return
         Log.w(TAG, "Focused surface blocked: ${surfaceMatch.blockKey}")
         focusedSurfaceBlocker.onSurfaceDetected(surfaceMatch)
     }
 
-    private fun handleWindowChange(packageName: String) {
+    private fun handleWindowChange(packageName: String, event: AccessibilityEvent) {
         val prefs = FocusGuardApp.instance.prefs
         FocusGuardApp.instance.trackingManager.onForegroundAppChanged(packageName)
 
         val blockingManager = FocusGuardApp.instance.blockingManager
 
         if (isSettingsOrInstallerPackage(packageName)) {
-            if (prefs.canBlockCriticalActions) {
-                if (packageName.contains("packageinstaller") || packageName.contains("uninstaller")) {
-                    Log.w(TAG, "Uninstall bypass attempt detected")
-                    forceHome()
-                    settingsBlocker.onBypassAttempt()
-                } else {
-                    settingsBlocker.onSettingsOpened()
-                }
+            val allRequiredPermissionsGranted = permissionMonitor.hasAllRequiredPermissions()
+            if (prefs.isPermissionSetupWindowActive() && !allRequiredPermissionsGranted) {
+                Log.d(TAG, "Allowing Settings during Focus Guard permission setup")
+                return
+            }
+            if (prefs.canBlockSettingsBypassNow &&
+                allRequiredPermissionsGranted
+            ) {
+                if (settingsBlocker.onSettingsOpened(event, rootInActiveWindow)) return
+                settingsBlocker.onSettingsContentChanged(event, rootInActiveWindow)
             }
             return
         }
@@ -113,12 +141,12 @@ class AppDetectorService : AccessibilityService() {
             return
         }
 
-        if (!blockingManager.canBlockNow(DetectionSource.ACCESSIBILITY)) {
+        if (!blockingManager.canBlockPackageNow(packageName, DetectionSource.ACCESSIBILITY)) {
             if (blockingManager.currentBlockedPackage != null) onBlockedAppClosed()
             return
         }
 
-        if (prefs.blacklistedApps.contains(packageName)) {
+        if (blockingManager.isBlockedPackage(packageName)) {
             startBlocking(packageName, DetectionSource.ACCESSIBILITY)
             return
         }
@@ -187,8 +215,8 @@ class AppDetectorService : AccessibilityService() {
         // Exact matches for known system packages
         if (packageName in SETTINGS_PACKAGES) return true
 
-        // Prefix matches for installer/uninstaller patterns
-        // These are always system components, safe to block
+        // Prefix matches only route installer events into SettingsBlocker.
+        // SettingsBlocker decides whether the target is Focus Guard.
         if (packageName.startsWith("com.android.packageinstaller") ||
             packageName.startsWith("com.google.android.packageinstaller") ||
             packageName.startsWith("com.android.vending")) {

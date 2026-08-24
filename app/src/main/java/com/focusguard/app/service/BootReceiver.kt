@@ -26,7 +26,11 @@ class BootReceiver : BroadcastReceiver() {
 
     private fun startGuardService(context: Context) {
         val prefs = FocusGuardPrefs(context)
-        if (!prefs.hasAcceptedAccessibilityDisclosure || !prefs.isGuardActiveNow()) {
+        if (!prefs.hasAcceptedAccessibilityDisclosure ||
+            !prefs.isProtectionArmed ||
+            !prefs.isServiceEnabled ||
+            !prefs.isGuardActiveNow()
+        ) {
             Log.d(TAG, "Disclosure not accepted yet; skipping boot start")
             return
         }
@@ -42,6 +46,8 @@ class BootReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start service after boot: ${e.message}", e)
         }
+
+        WatchdogReceiver.scheduleWatchdog(context)
     }
 
     companion object {

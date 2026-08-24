@@ -10,31 +10,21 @@ import kotlin.random.Random
 /**
  * LAYER 3: Randomized Waiting
  *
- * Shows fake loading states with unpredictable durations.
- * Progress bar sometimes moves, sometimes freezes, sometimes goes BACKWARD.
- *
- * Designed to feel like a broken, unreliable system.
+ * Shows a short, unpredictable pause before the next focus step.
+ * Progress bar pacing is varied so the delay is harder to game.
  */
 class RandomWaitLayer : FrictionLayer {
 
     override val name = "Random Wait"
 
-    private val fakeLoadingMessages = listOf(
-        "Verifying your intent...",
-        "Checking access permissions...",
-        "Connecting to verification server...",
-        "Analyzing usage patterns...",
-        "Processing your request...",
-        "Evaluating focus metrics...",
-        "Cross-referencing study schedule...",
-        "Computing distraction probability...",
-        "Syncing with accountability system...",
-        "Validating session token...",
-        "Querying behavior database...",
-        "Calculating risk assessment...",
-        "Initializing access protocol...",
-        "Performing security handshake...",
-        "Loading decision matrix...",
+    private val focusCheckMessages = listOf(
+        "Pausing before access...",
+        "Checking focus mode...",
+        "Reviewing your schedule...",
+        "Preparing the next step...",
+        "Keeping the block active...",
+        "Waiting briefly...",
+        "Returning you to focus...",
     )
 
     override suspend fun execute(context: FrictionContext): FrictionResult {
@@ -67,26 +57,26 @@ class RandomWaitLayer : FrictionLayer {
             var messageIndex = 0
 
             // Set initial message
-            primaryText?.text = fakeLoadingMessages[0]
+            primaryText?.text = focusCheckMessages[0]
             secondaryText?.text = "Please wait..."
 
             while (true) {
                 val elapsed = System.currentTimeMillis() - startTime
                 if (elapsed >= totalMs) break
 
-                // Random progress behavior
+                // Varied progress pacing
                 val action = Random.nextFloat()
                 currentProgress = when {
                     action < 0.15f -> {
-                        // 15%: Go BACKWARD
+                        // 15%: Step back slightly
                         (currentProgress - Random.nextInt(3, 12)).coerceAtLeast(0)
                     }
                     action < 0.35f -> {
-                        // 20%: FREEZE (no change)
+                        // 20%: Pause
                         currentProgress
                     }
                     action < 0.50f -> {
-                        // 15%: Jump ahead then back
+                        // 15%: Small jump
                         val jump = currentProgress + Random.nextInt(10, 25)
                         progressBar?.progress = jump.coerceAtMost(95)
                         delay(300)
@@ -100,19 +90,19 @@ class RandomWaitLayer : FrictionLayer {
 
                 progressBar?.progress = currentProgress
 
-                // Cycle through fake messages
+                // Cycle through focus messages
                 if (Random.nextFloat() < 0.2f) {
-                    messageIndex = (messageIndex + 1) % fakeLoadingMessages.size
-                    primaryText?.text = fakeLoadingMessages[messageIndex]
+                    messageIndex = (messageIndex + 1) % focusCheckMessages.size
+                    primaryText?.text = focusCheckMessages[messageIndex]
                 }
 
-                // Random delay between ticks (makes it feel broken)
+                // Random delay between ticks keeps timing unpredictable.
                 delay(Random.nextLong(500, 2000))
             }
 
             // Finish
             progressBar?.progress = 100
-            primaryText?.text = "Verification step complete."
+            primaryText?.text = "Focus check complete."
             delay(500)
             progressBar?.visibility = View.GONE
 

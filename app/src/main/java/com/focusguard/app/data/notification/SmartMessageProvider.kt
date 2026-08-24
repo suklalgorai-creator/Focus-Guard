@@ -26,54 +26,44 @@ class SmartMessageProvider(
 
         private val messageBank = mapOf(
             NotificationType.PRAISE to listOf(
-                "Aaj toh tum full focus mode me ho... $SUBJECT_PLACEHOLDER handle ho raha hai 😏",
-                "3 correct in a row... ye luck nahi hai.",
-                "Sach batao... topper banne ka plan secretly chal raha hai?",
-                "$SUBJECT_PLACEHOLDER tumse darr raha hai ab.",
-                "Momentum bana liya hai... ab todna mat.",
-                "Aaj discipline ka scene strong lag raha hai.",
-                "Accuracy clean hai. Bas ab consistency chahiye.",
-                "$SUBJECT_PLACEHOLDER me grip aa rahi hai... nice."
+                "$SUBJECT_PLACEHOLDER progress is improving.",
+                "Good streak. Keep it steady.",
+                "Accuracy is clean. Stay consistent.",
+                "Momentum is building.",
+                "Today has been focused so far.",
+                "$SUBJECT_PLACEHOLDER is getting clearer."
             ),
             NotificationType.STRUGGLE to listOf(
-                "$SUBJECT_PLACEHOLDER thoda ignore ho raha hai... ya jaan ke avoid kar rahe ho?",
-                "Same mistake fir se... coincidence nahi hai.",
-                "Tum better ho isse. Ek baar aur try karo.",
-                "Ye topic tumse bhaag nahi raha... tum bhaag rahe ho kya?",
-                "Abhi fix kar lo... baad me regret mat karna.",
-                "$SUBJECT_PLACEHOLDER ka weak spot dikh raha hai. Aaj hi patch karo.",
-                "Galti repeat ho rahi hai. Signal clear hai.",
-                "Thoda slow jao, par sahi samajh ke jao."
+                "$SUBJECT_PLACEHOLDER needs one more pass.",
+                "Same mistake repeated. Review it calmly.",
+                "Try one slower attempt.",
+                "This topic needs practice, not pressure.",
+                "Fix the pattern while it is fresh.",
+                "Small correction now saves time later."
             ),
             NotificationType.COMEBACK to listOf(
-                "Aaj thoda missing ho... sab theek hai?",
-                "Kal ka flow break ho gaya... wapas aa jao.",
-                "Bas ek question solve karo... fir decide karna continue karna hai ya nahi.",
-                "Main wait kar raha hoon... ek PYQ bas.",
-                "Itna silent rehna tumhari habit nahi hai...",
-                "Comeback ka best time abhi hai.",
-                "Flow wapas lane ke liye ek question enough hai.",
-                "Chalo, restart simple rakhte hain: ek PYQ."
+                "Start with one PYQ.",
+                "Restart simple: one question.",
+                "Come back with a short session.",
+                "One clean attempt is enough to resume.",
+                "Your next step is small.",
+                "Open the plan and continue."
             ),
             NotificationType.BLOCK_TRIGGER to listOf(
-                "Instagram baad me... ye question pehle 😉",
-                "Escape kar rahe ho ya face karoge?",
-                "Bas 30 sec. Ek answer. Deal?",
-                "Scroll karne se rank nahi aayega... answer dene se aayega.",
-                "Distraction strong hai... par tum usse strong ho ya nahi?",
-                "Bas 1 question. Itna toh kar sakte ho.",
-                "Ek PYQ solve karo... fir jo chahe karo.",
-                "$SUBJECT_PLACEHOLDER weak hai... aur tum yaha?"
+                "Blocked app detected. Solve one PYQ first.",
+                "Focus mode is active.",
+                "One answer before access.",
+                "Return to the study session.",
+                "This app is blocked during focus time.",
+                "$SUBJECT_PLACEHOLDER can use one quick review."
             ),
             NotificationType.IMPROVEMENT to listOf(
-                "$SUBJECT_PLACEHOLDER improve ho raha hai... ab push karoge ya yahin rukoge?",
-                "Kal se better ho... ye hi growth hai.",
-                "Consistency aa rahi hai... ye dangerous sign hai (good one 😏)",
-                "$SUBJECT_PLACEHOLDER me progress visible hai. Ab rukna mat.",
-                "Small improvement bhi rank banata hai.",
-                "Aaj ka effort kal ka confidence banega.",
-                "Pattern change ho raha hai... good direction.",
-                "Progress pakdi gayi. Ab isko streak banao."
+                "$SUBJECT_PLACEHOLDER is improving.",
+                "Better than last time. Keep going.",
+                "Progress is visible.",
+                "Good direction. Build the streak.",
+                "Small improvement counts.",
+                "Today's effort becomes tomorrow's confidence."
             )
         )
     }

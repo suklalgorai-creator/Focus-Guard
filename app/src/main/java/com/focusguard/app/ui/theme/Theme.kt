@@ -10,29 +10,34 @@ object FrictionColors {
     var useDarkPalette: Boolean = true
 
     val Background: Color
-        get() = if (useDarkPalette) Color(0xFF0B0F1A) else Color(0xFFF6F8FC)
+        get() = if (useDarkPalette) Color(0xFF0E1117) else Color(0xFFF6F8FC)
     val Surface: Color
-        get() = if (useDarkPalette) Color(0xFF111827) else Color(0xFFFFFFFF)
+        get() = if (useDarkPalette) Color(0xFF141A24) else Color(0xFFFFFFFF)
     val SurfaceLight: Color
-        get() = if (useDarkPalette) Color(0xFF172036) else Color(0xFFF9FAFB)
+        get() = if (useDarkPalette) Color(0xFF1A2331) else Color(0xFFF9FAFB)
     val SurfaceElevated: Color
-        get() = if (useDarkPalette) Color(0xFF202B45) else Color(0xFFEFF3F8)
+        get() = if (useDarkPalette) Color(0xFF253044) else Color(0xFFEFF3F8)
 
     val GlassBackground: Color
-        get() = if (useDarkPalette) Color(0x24FFFFFF) else Color(0xD9FFFFFF)
+        get() = if (useDarkPalette) Color(0x1AFFFFFF) else Color(0xE6FFFFFF)
     val GlassBorder: Color
-        get() = if (useDarkPalette) Color(0x1FFFFFFF) else Color(0x1A111827)
+        get() = if (useDarkPalette) Color(0x18FFFFFF) else Color(0x1A111827)
 
     val Accent: Color
-        get() = if (useDarkPalette) Color(0xFF2DD4FF) else Color(0xFF2563EB)
+        get() = if (useDarkPalette) Color(0xFF34D399) else Color(0xFF16A34A)
     val AccentPurple: Color
-        get() = if (useDarkPalette) Color(0xFF8B5CF6) else Color(0xFF7C3AED)
+        get() = if (useDarkPalette) Color(0xFF22C55E) else Color(0xFF15803D)
     val AccentGradient: List<Color>
         get() = listOf(Accent, AccentPurple)
     val AccentSoft: Color
-        get() = if (useDarkPalette) Color(0x332DD4FF) else Color(0x1A2563EB)
+        get() = if (useDarkPalette) Color(0x2634D399) else Color(0x1A16A34A)
     val AccentMuted: Color
-        get() = if (useDarkPalette) Color(0x1A2DD4FF) else Color(0x142563EB)
+        get() = if (useDarkPalette) Color(0x1734D399) else Color(0x1216A34A)
+
+    val Info: Color
+        get() = if (useDarkPalette) Color(0xFF60A5FA) else Color(0xFF2563EB)
+    val InfoSoft: Color
+        get() = if (useDarkPalette) Color(0x1F60A5FA) else Color(0x142563EB)
 
     val Secondary: Color
         get() = if (useDarkPalette) Color(0xFFFBBF24) else Color(0xFFD97706)
@@ -69,11 +74,11 @@ object FrictionColors {
         get() = Warning
 
     val GradientStart: Color
-        get() = if (useDarkPalette) Color(0xFF0B0F1A) else Color(0xFFF6F8FC)
+        get() = if (useDarkPalette) Color(0xFF0E1117) else Color(0xFFF6F8FC)
     val GradientMid: Color
-        get() = if (useDarkPalette) Color(0xFF111827) else Color(0xFFEFF6FF)
+        get() = if (useDarkPalette) Color(0xFF141A24) else Color(0xFFEFF6FF)
     val GradientEnd: Color
-        get() = if (useDarkPalette) Color(0xFF070A12) else Color(0xFFFFFFFF)
+        get() = if (useDarkPalette) Color(0xFF090C12) else Color(0xFFFFFFFF)
 
     val CardBackground: Color
         get() = if (useDarkPalette) Color(0xFF111827) else Color(0xFFFFFFFF)

@@ -1,6 +1,7 @@
 package com.focusguard.app.ui.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,15 +10,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Security
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -28,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,9 +62,18 @@ fun LoginScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var isCreatingAccount by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    val scrollState = rememberScrollState()
+
+    val isFormValid = when {
+        state.isLoading -> false
+        isCreatingAccount && name.trim().length < 2 -> false
+        !email.contains("@") || !email.contains(".") -> false
+        password.length < 8 -> false
+        else -> true
+    }
 
     LaunchedEffect(state.errorMessage) {
         val message = state.errorMessage ?: return@LaunchedEffect
@@ -79,6 +93,8 @@ fun LoginScreen(
                     )
                 )
             )
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .imePadding()
             .padding(24.dp)
     ) {
         GlassCard(
@@ -89,7 +105,9 @@ fun LoginScreen(
             backgroundColor = FrictionColors.GlassBackground
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .verticalScroll(scrollState)
+                    .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -213,24 +231,28 @@ fun LoginScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp),
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(FrictionColors.AccentSoft),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
+                        Text(
+                            text = if (isCreatingAccount) "Creating account..." else "Signing in...",
+                            color = FrictionColors.Accent,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 } else {
                     GradientButton(
                         text = if (isCreatingAccount) "Create account" else "Sign in",
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = isFormValid,
                         onClick = {
                             if (isCreatingAccount) {
-                                onEmailSignUp(name, email, password)
+                                onEmailSignUp(name.trim(), email.trim(), password)
                             } else {
-                                onEmailSignIn(email, password)
+                                onEmailSignIn(email.trim(), password)
                             }
                         }
                     )
@@ -265,6 +287,16 @@ fun LoginScreen(
                     Text(
                         text = "Sync is not configured in this build. Local blocking still works.",
                         color = FrictionColors.TextMuted,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                if (isCreatingAccount && name.isNotBlank() && name.trim().length < 2) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Name should be at least 2 characters.",
+                        color = FrictionColors.Warning,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center
                     )

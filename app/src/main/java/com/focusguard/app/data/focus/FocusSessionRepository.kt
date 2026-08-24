@@ -24,25 +24,39 @@ class FocusSessionRepository(
         buildState(mode)
     }
 
-    suspend fun start(mode: FocusMode): FocusSessionState = withContext(ioDispatcher) {
+    suspend fun start(mode: FocusMode, accountabilityPin: String? = null): FocusSessionState = withContext(ioDispatcher) {
         val now = clock()
+        val useAccountabilityLock = !accountabilityPin.isNullOrBlank()
+        if (useAccountabilityLock && !prefs.startAccountabilityLock(
+                pin = accountabilityPin,
+                durationMs = mode.durationMinutes * 60_000L
+            )
+        ) {
+            return@withContext buildState(mode)
+        }
         prefs.isGuardActive = true
         prefs.focusSessionStartTime = now
         prefs.focusSessionModeName = mode.name
         prefs.isFocusSessionXpAwarded = false
         settingsRepository.enableStrictMode(
             durationMinutes = mode.durationMinutes,
-            exitProtectionEnabled = prefs.isStrictModeExitProtectionEnabled
+            exitProtectionEnabled = prefs.isStrictModeExitProtectionEnabled || useAccountabilityLock,
+            keepRequestedDuration = useAccountabilityLock
         )
         Log.d(TAG, "Focus session started: mode=${mode.name}, start=$now")
         buildState(mode)
     }
 
-    suspend fun stop(mode: FocusMode): FocusSessionState = withContext(ioDispatcher) {
+    suspend fun stop(mode: FocusMode, accountabilityPin: String? = null): FocusSessionState = withContext(ioDispatcher) {
+        if (prefs.isAccountabilityLockActive && !prefs.verifyAccountabilityPin(accountabilityPin.orEmpty())) {
+            Log.w(TAG, "Blocked focus-session exit: Accountability PIN required")
+            return@withContext buildState(mode)
+        }
         awardCurrentSessionXpIfNeeded(mode, clock())
         settingsRepository.disableStrictMode()
         prefs.isGuardActive = false
         prefs.clearFocusSessionMetadata()
+        prefs.clearAccountabilityLock()
         Log.d(TAG, "Focus session stopped manually")
         buildState(mode).copy(
             sessionXp = 0,
@@ -86,7 +100,8 @@ class FocusSessionRepository(
             sessionXp = sessionXp,
             totalXp = prefs.totalFocusXp + sessionXp,
             streakDays = streak,
-            badges = badgesFor(sessionXp = sessionXp, totalXp = prefs.totalFocusXp + sessionXp, streak = streak)
+            badges = badgesFor(sessionXp = sessionXp, totalXp = prefs.totalFocusXp + sessionXp, streak = streak),
+            isAccountabilityLockActive = prefs.isAccountabilityLockActive
         )
     }
 
@@ -108,6 +123,7 @@ class FocusSessionRepository(
         settingsRepository.disableStrictMode()
         prefs.isGuardActive = false
         prefs.clearFocusSessionMetadata()
+        prefs.clearAccountabilityLock()
         Log.d(TAG, "Focus session finalized after natural timer completion")
     }
 

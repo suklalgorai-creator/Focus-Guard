@@ -4,8 +4,10 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.widget.*
+import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.R
 import com.focusguard.app.friction.tasks.*
+import com.focusguard.app.integration.studyflow.StudyFlowOverlayRenderer
 import kotlinx.coroutines.*
 import kotlin.random.Random
 
@@ -13,7 +15,7 @@ import kotlin.random.Random
  * LAYER 2: Cognitive Tasks — PYQ Quiz + Motivating Lines
  *
  * Shows a motivating line at the top, then a PYQ below it.
- * ON CORRECT → Guilt message, force home. No access ever.
+ * ON CORRECT → Advance deeper into friction.
  * ON WRONG → Show explanation for 8 seconds, then restart pipeline.
  */
 class CognitiveTaskLayer : FrictionLayer {
@@ -78,33 +80,52 @@ class CognitiveTaskLayer : FrictionLayer {
             }
 
             // Show attempt info
-            attemptInfo?.text = "Solve to prove you should be studying · PYQ $taskNumber/$totalTasks"
+            attemptInfo?.text = "PYQ $taskNumber/$totalTasks"
 
             if (challenge.taskType == TaskType.MEMORY) {
-                taskContainer?.visibility = View.VISIBLE
+                val safeTaskContainer = taskContainer
+                if (safeTaskContainer == null) {
+                    primaryText?.apply {
+                        text = "Focus task unavailable"
+                        setTextColor(0xFFFF4D6D.toInt())
+                    }
+                    secondaryText?.text = "Close the distracting app and return to your study session."
+                    return@withContext FrictionResult.Error("Focus task unavailable")
+                }
+
+                safeTaskContainer.visibility = View.VISIBLE
                 inputField?.visibility = View.GONE
                 submitButton?.visibility = View.GONE
                 return@withContext executeMemoryTask(
-                    challenge, taskContainer!!, context
+                    challenge, safeTaskContainer, context
                 )
             }
 
-            // Hide irrelevant containers
-            taskContainer?.visibility = View.GONE
+            StudyFlowOverlayRenderer.render(
+                container = taskContainer,
+                snapshot = FocusGuardApp.instance.prefs.getStudyFlowDaySnapshot()
+            )
             val optionsContainer = view.findViewById<LinearLayout>(R.id.options_container)
             
             val result = CompletableDeferred<FrictionResult>()
 
             // Shared handler for answering (from button or edittext)
             val handleAnswer: (String) -> Unit = { userAnswer: String ->
-                if (challenge.checkAnswer(userAnswer)) {
-                    // CORRECT — Guilt trip + Force HOME
-                    val taunt = GUILT_TRIP_MESSAGES[Random.nextInt(GUILT_TRIP_MESSAGES.size)]
+                val isCorrect = challenge.checkAnswer(userAnswer)
+                OverlayPyqAttemptLogger.logAnswer(
+                    scope = context.coroutineScope,
+                    challenge = challenge,
+                    selectedOption = userAnswer,
+                    blockedPackage = context.blockedPackage
+                )
+
+                if (isCorrect) {
+                    val nextLine = FOLLOW_UP_MESSAGES[Random.nextInt(FOLLOW_UP_MESSAGES.size)]
                     primaryText?.apply {
-                        text = taunt
+                        text = nextLine
                         setTextColor(0xFFFFB347.toInt()) // Amber
                     }
-                    secondaryText?.text = "This app is locked. Go study."
+                    secondaryText?.text = "Good. Continue the focus check."
                     
                     submitButton?.isEnabled = false
                     inputField?.isEnabled = false
@@ -119,28 +140,23 @@ class CognitiveTaskLayer : FrictionLayer {
                     }
 
                     context.coroutineScope.launch {
-                        delay(3500)
+                        delay(1800)
                         withContext(Dispatchers.Main) {
-                            primaryText?.apply {
-                                text = "Redirecting to Home..."
-                                setTextColor(0xFFFF4D6D.toInt())
-                            }
+                            secondaryText?.text = "Good. Continue."
                         }
-                        delay(500)
-                        com.focusguard.app.detection.AppDetectorService.instance?.forceHome()
-                        result.complete(FrictionResult.Abandoned)
+                        result.complete(FrictionResult.Passed)
                     }
                 } else {
-                    // WRONG — Show solution, THEN restart
+                    // Wrong answer: show solution, then restart.
                     primaryText?.apply {
-                        text = "✗ Wrong. Correct: ${challenge.answer}"
+                        text = "Not quite - the answer is ${challenge.answer}"
                         setTextColor(0xFFFF4D6D.toInt())
                     }
 
                     val explanation = challenge.explanation
                     if (!explanation.isNullOrBlank()) {
                         secondaryText?.apply {
-                            text = "📖 Explanation:\n\n$explanation"
+                            text = "Explanation:\n\n$explanation"
                             setTextColor(0xFFBBBBBB.toInt())
                         }
                     }
@@ -161,7 +177,7 @@ class CognitiveTaskLayer : FrictionLayer {
                         delay(8000)
                         withContext(Dispatchers.Main) {
                             primaryText?.apply {
-                                text = "Restarting..."
+                                text = "Let's try one more time."
                                 setTextColor(0xFFFF4D6D.toInt())
                             }
                             secondaryText?.text = ""
@@ -270,41 +286,28 @@ class CognitiveTaskLayer : FrictionLayer {
         private const val TASK_TIMEOUT_MS = 45_000L
 
         /**
-         * Motivating lines shown at the top when a PYQ appears.
+         * Focus lines shown at the top when a PYQ appears.
          */
         private val MOTIVATING_LINES = listOf(
-            "Your competitors are studying right now.",
-            "Reels won't get you a medical seat.",
-            "Is wasting time worth failing the exam?",
-            "You committed to focus. Prove it.",
-            "Every second here drops your rank.",
-            "Future YOU is begging you to stop.",
-            "Dopamine detox — feed your brain PYQs.",
-            "Close this. Open your books.",
-            "Distraction is the enemy of selection.",
-            "You're better than this addiction.",
-            "Your parents are working hard for you.",
-            "89 din mein NEET hai. Padh le.",
-            "This won't help you crack the exam.",
-            "Phone rakh. Book utha. Abhi."
+            "Focus mode is active.",
+            "This app is blocked right now.",
+            "Solve one PYQ.",
+            "Stay with your study plan.",
+            "A short pause protects the session.",
+            "Answer calmly, then return to study.",
+            "Keep the promise you made to yourself.",
+            "One question before anything else."
         )
 
         /**
-         * Guilt-trip messages shown on correct answer.
-         * No praise. No access. Just guilt.
+         * Follow-up messages shown on correct answer.
          */
-        private val GUILT_TRIP_MESSAGES = listOf(
-            "Good. So why are you here wasting time?",
-            "Right answer. Now go solve 50 more.",
-            "You knew this. Why aren't you studying?",
-            "Correct. Still no access. Go study.",
-            "If you can solve PYQs, you don't need reels.",
-            "Correct answer, wrong priorities.",
-            "Your brain works. Use it for prep.",
-            "That was easy. Your exam won't be.",
-            "You just proved you can study. Go DO it.",
-            "Sahi jawab. Ab ja ke padh le.",
-            "Answer sahi hai. Phone rakh, book utha.",
+        private val FOLLOW_UP_MESSAGES = listOf(
+            "Correct. Focus mode stays active.",
+            "Good answer. Continue the check.",
+            "Correct. Return to the plan.",
+            "Good. One step closer to study.",
+            "Correct. Keep the session clean.",
         )
     }
 }

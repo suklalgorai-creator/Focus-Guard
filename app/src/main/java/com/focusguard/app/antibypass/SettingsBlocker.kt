@@ -1,121 +1,157 @@
 package com.focusguard.app.antibypass
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
-import android.view.View
 import android.view.accessibility.AccessibilityEvent
-import android.widget.TextView
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.ui.graphics.toArgb
 import com.focusguard.app.FocusGuardApp
-import com.focusguard.app.R
-import com.focusguard.app.friction.EscalationEngine
 import com.focusguard.app.overlay.OverlayManager
 import com.focusguard.app.ui.theme.FrictionColors
-import androidx.compose.ui.graphics.toArgb
-import kotlinx.coroutines.*
+import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * Detects when the user tries to access Settings during opted-in Strict Mode.
+ * Protects Focus Guard's own system settings/removal path during an active block.
  *
- * When Strict Mode exit protection is enabled and a bypass surface is detected:
- * 1. Shows a blocking overlay on top of Settings
- * 2. Displays a clear protection message
- * 3. Adds +2 to escalation penalty for the next friction session
- *
- * Monitors for:
- * - Opening Settings app
- * - Navigating to Accessibility settings
- * - Navigating to App Info for Focus Guard
- * - Navigating to Display over other apps settings
+ * Other apps can still be uninstalled and normal file delete screens are ignored.
  */
 class SettingsBlocker(
     private val context: Context,
     private val overlayManager: OverlayManager
 ) {
 
-    private val escalationEngine = EscalationEngine()
     private var isBlockingSettings = false
+    private var accessibilityWatchUntilMs = 0L
     private var settingsBlockJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    // Suspicious Settings paths
-    private val suspiciousKeywords = listOf(
-        "accessibility",
-        "focusguard",
-        "focus guard",
-        "focusguard",
-        "friction guard",
-        "display over",
-        "draw over",
-        "appear on top",
-        "overlay",
-        "usage access",
-        "usage data",
-        "app info",
-        "force stop",
-        "disable",
+    private val protectedTargetKeywords by lazy {
+        buildSet {
+            add(context.packageName.lowercase(Locale.US))
+            add("focus guard")
+            add("focusguard")
+            add("friction guard")
+            runCatching {
+                val appInfo = context.packageManager.getApplicationInfo(context.packageName, 0)
+                context.packageManager.getApplicationLabel(appInfo).toString()
+            }.getOrNull()
+                ?.lowercase(Locale.US)
+                ?.takeIf { it.isNotBlank() }
+                ?.let(::add)
+        }
+    }
+
+    private val selfRemovalKeywords = listOf(
         "uninstall",
-        "permissions",
-        "special app access",
-        "special access",
-        "device admin",
-        "device administrator",
-        "battery optimization",
-        "battery saver",
+        "remove app",
+        "delete app",
+        "delete this app",
+        "remove from device",
         "clear data",
         "clear storage",
-        "clear cache",
-        "manage apps",
-        "installed apps",
-        // Launcher context menu keywords (long-press app icon)
-        "remove",
-        "delete",
-        "卸载" // Chinese uninstall (ColorOS sometimes uses it)
+        "manage storage",
+        "clear all data",
+        "reset app",
+        "clear cache and data",
+        "force stop",
+        "force close",
+        "disable app",
+        "disable this app"
     )
 
-    /**
-     * Called when Settings app window is detected.
-     */
-    fun onSettingsOpened() {
-        if (isBlockingSettings) return
+    private val selfAdminRemovalKeywords = listOf(
+        "deactivate this device admin app",
+        "deactivate this device administrator",
+        "remove device admin",
+        "deactivate"
+    )
 
-        Log.w(TAG, "Settings opened during opted-in Strict Mode protection")
-        // Don't block immediately — only block if they navigate to suspicious areas
-        // The content change handler will catch that
-    }
+    private val accessibilityDisableKeywords = listOf(
+        "accessibility",
+        "installed services",
+        "downloaded services",
+        "downloaded apps",
+        "accessibility service",
+        "turn off service",
+        "stop service",
+        "accessibility settings"
+    )
 
-    /**
-     * Called on Settings content changes to detect navigation to
-     * Accessibility, App Info, or overlay permission screens.
-     */
-    fun onSettingsContentChanged(event: AccessibilityEvent) {
-        val text = extractText(event).lowercase()
+    private val focusGuardSettingsKeywords = listOf(
+        "app info",
+        "app details",
+        "app permissions",
+        "notifications",
+        "battery",
+        "storage",
+        "mobile data",
+        "data usage",
+        "screen time",
+        "open by default",
+        "display over other apps",
+        "appear on top",
+        "usage access",
+        "force stop",
+        "uninstall",
+        "clear data",
+        "clear storage"
+    )
 
-        // Check if user is navigating to a suspicious settings page
-        val isSuspicious = suspiciousKeywords.any { keyword ->
-            text.contains(keyword)
-        }
+    fun onSettingsOpened(
+        event: AccessibilityEvent,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        if (isBlockingSettings) return true
 
-        if (isSuspicious && !isBlockingSettings) {
-            Log.w(TAG, "🚨 BYPASS ATTEMPT DETECTED! Text: $text")
+        val text = extractText(event, rootNode).lowercase(Locale.US)
+        rememberAccessibilityZone(text)
+
+        if (shouldBlockSettingsAttempt(text)) {
+            Log.w(TAG, "Focus Guard settings path opened during active block")
             blockSettings()
+            return true
         }
+
+        Log.d(TAG, "Settings/installer opened; waiting for Focus Guard removal context")
+        return false
     }
 
-    fun onBypassAttempt() {
-        blockSettings()
+    fun onSettingsContentChanged(
+        event: AccessibilityEvent,
+        rootNode: AccessibilityNodeInfo?
+    ): Boolean {
+        val text = extractText(event, rootNode).lowercase(Locale.US)
+        if (text.isBlank()) return false
+        rememberAccessibilityZone(text)
+
+        if (shouldBlockSettingsAttempt(text)) {
+            if (!isBlockingSettings) {
+                Log.w(TAG, "Focus Guard settings bypass attempt detected")
+                blockSettings()
+            }
+            return true
+        }
+
+        return false
     }
 
     private fun blockSettings() {
         isBlockingSettings = true
 
-        // Apply penalty
-        escalationEngine.applyBypassPenalty(2)
-        Log.w(TAG, "Exit protection penalty applied: +2 escalation levels")
+        FocusGuardApp.instance.antiBypassManager.recordSettingsProtectionTriggered("focus_guard_settings")
+        Log.w(TAG, "Self-removal protection level increased: +2 escalation levels")
 
-        // Opted-in Strict Mode exit protection: move the user away from system settings.
         com.focusguard.app.detection.AppDetectorService.instance?.forceHome()
 
-        // Show blocking overlay as secondary defense
         val overlayShown = overlayManager.show()
         if (!overlayShown) {
             isBlockingSettings = false
@@ -127,23 +163,20 @@ class SettingsBlocker(
                 overlayManager.resetUI()
 
                 overlayManager.getPrimaryMessage()?.apply {
-                    text = "Strict Mode is active"
+                    text = "Focus Guard is protected"
                     setTextColor(FrictionColors.Error.toArgb())
                     textSize = 26f
                 }
                 overlayManager.getSecondaryMessage()?.text =
-                    "You enabled Exit Protection for this Strict Mode session.\n\n" +
-                    "Focus Guard will return you home until the timer ends.\n\n" +
-                    "Penalty applied: +2 escalation levels for your next distraction attempt."
+                    "Active block time is keeping you on track. Accessibility protection remains active.\n\n" +
+                        "Protection level increased to help you stay focused."
 
                 overlayManager.getAttemptInfo()?.apply {
-                    text = "Total exit delay penalty: +${FocusGuardApp.instance.prefs.bypassPenalty} levels"
+                    text = "Exit protection active"
                     setTextColor(FrictionColors.Warning.toArgb())
                 }
             }
 
-            // Keep overlay showing for 5 seconds (user is already on Home screen)
-            // Then hide. If they go back to Settings, onSettingsOpened fires again.
             delay(5000)
 
             withContext(Dispatchers.Main) {
@@ -153,11 +186,81 @@ class SettingsBlocker(
         }
     }
 
-    private fun extractText(event: AccessibilityEvent): String {
-        val texts = mutableListOf<String>()
+    private fun isFocusGuardRemovalAttempt(text: String): Boolean {
+        val mentionsFocusGuard = protectedTargetKeywords.any(text::contains)
+        if (!mentionsFocusGuard) return false
+
+        return selfRemovalKeywords.any(text::contains) ||
+            selfAdminRemovalKeywords.any(text::contains)
+    }
+
+    private fun isAccessibilityDisableAttempt(text: String): Boolean {
+        val mentionsFocusGuard = protectedTargetKeywords.any(text::contains)
+        val hasAccessibilityContext = accessibilityDisableKeywords.any(text::contains)
+        return mentionsFocusGuard && hasAccessibilityContext
+    }
+
+    private fun isFocusGuardSettingsAttempt(text: String): Boolean {
+        val mentionsFocusGuard = protectedTargetKeywords.any(text::contains)
+        if (!mentionsFocusGuard) return false
+
+        return focusGuardSettingsKeywords.any(text::contains) ||
+            isFocusGuardRemovalAttempt(text) ||
+            isAccessibilityDisableAttempt(text)
+    }
+
+    private fun shouldBlockSettingsAttempt(fullText: String): Boolean {
+        return isFocusGuardSettingsAttempt(fullText) ||
+            protectedTargetKeywords.any(fullText::contains) ||
+            (isWatchingAccessibilityZone() && isFocusGuardAccessibilityTarget(fullText))
+    }
+
+    private fun rememberAccessibilityZone(text: String) {
+        val isAccessibilitySettings = accessibilityDisableKeywords.any(text::contains)
+        if (isAccessibilitySettings) {
+            accessibilityWatchUntilMs = SystemClock.elapsedRealtime() + ACCESSIBILITY_WATCH_MS
+        }
+    }
+
+    private fun isWatchingAccessibilityZone(): Boolean {
+        return SystemClock.elapsedRealtime() <= accessibilityWatchUntilMs
+    }
+
+    private fun isFocusGuardAccessibilityTarget(text: String): Boolean {
+        val mentionsFocusGuard = protectedTargetKeywords.any(text::contains)
+        if (!mentionsFocusGuard) return false
+
+        return accessibilityDisableKeywords.any(text::contains) ||
+            "on" in text ||
+            "off" in text ||
+            "allow" in text ||
+            "deny" in text ||
+            "use service" in text
+    }
+
+    private fun extractText(
+        event: AccessibilityEvent,
+        rootNode: AccessibilityNodeInfo?
+    ): String {
+        val texts = linkedSetOf<String>()
         event.text?.forEach { texts.add(it.toString()) }
         event.contentDescription?.let { texts.add(it.toString()) }
+        collectNodeText(rootNode, texts)
         return texts.joinToString(" ")
+    }
+
+    private fun collectNodeText(
+        node: AccessibilityNodeInfo?,
+        texts: MutableSet<String>
+    ) {
+        if (node == null) return
+
+        node.text?.toString()?.takeIf { it.isNotBlank() }?.let(texts::add)
+        node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let(texts::add)
+
+        for (index in 0 until node.childCount) {
+            collectNodeText(node.getChild(index), texts)
+        }
     }
 
     fun destroy() {
@@ -167,5 +270,6 @@ class SettingsBlocker(
 
     companion object {
         private const val TAG = "SettingsBlocker"
+        private const val ACCESSIBILITY_WATCH_MS = 8_000L
     }
 }

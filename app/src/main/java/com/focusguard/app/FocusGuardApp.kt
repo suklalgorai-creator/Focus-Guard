@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.focusguard.app.antibypass.AntiBypassManager
 import com.focusguard.app.blocking.BlockingManager
 import com.focusguard.app.data.analytics.AnalyticsRepository
 import com.focusguard.app.data.auth.AuthConfig
@@ -29,6 +30,7 @@ import com.focusguard.app.data.usage.UsageStatsReconciler
 import com.focusguard.app.persistence.FocusGuardDatabase
 import com.focusguard.app.persistence.FocusGuardPrefs
 import com.focusguard.app.friction.tasks.QuestionRepository
+import com.focusguard.app.service.ServiceHealthWorker
 import com.focusguard.app.service.SmartNotificationWorker
 import java.util.concurrent.TimeUnit
 
@@ -68,6 +70,8 @@ class FocusGuardApp : Application() {
         private set
     lateinit var trackingManager: TrackingManager
         private set
+    lateinit var antiBypassManager: AntiBypassManager
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -76,6 +80,8 @@ class FocusGuardApp : Application() {
         // Initialize persistence
         database = FocusGuardDatabase.getInstance(this)
         prefs = FocusGuardPrefs(this)
+        antiBypassManager = AntiBypassManager(this, prefs)
+        prefs.migrateFocusedSurfaceDefaultsIfNeeded()
         blockingManager = BlockingManager(this, prefs)
         usageRepository = UsageRepository(
             context = this,
@@ -148,6 +154,7 @@ class FocusGuardApp : Application() {
         // Create notification channels
         createNotificationChannels()
         scheduleSmartNotifications()
+        scheduleServiceHealthWorker()
     }
 
     private fun createNotificationChannels() {
@@ -194,6 +201,19 @@ class FocusGuardApp : Application() {
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             SmartNotificationWorker.UNIQUE_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
+            request
+        )
+    }
+
+    private fun scheduleServiceHealthWorker() {
+        val request = PeriodicWorkRequestBuilder<ServiceHealthWorker>(
+            15,
+            TimeUnit.MINUTES
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            ServiceHealthWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
             request
         )
     }

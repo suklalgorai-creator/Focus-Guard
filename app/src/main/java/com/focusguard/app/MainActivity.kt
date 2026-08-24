@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.focusguard.app.domain.AppUsageData
 import com.focusguard.app.antibypass.PermissionMonitor
+import com.focusguard.app.data.settings.SettingsRepository
 import com.focusguard.app.service.GuardForegroundService
 import com.focusguard.app.ui.theme.FrictionColors
 import com.focusguard.app.ui.components.GlassCard
@@ -61,13 +62,18 @@ import com.focusguard.app.ui.auth.LoginScreen
 import com.focusguard.app.ui.components.PremiumBottomNavigation
 import com.focusguard.app.ui.components.PremiumDrawerContent
 import com.focusguard.app.ui.components.PremiumNavItem
+import com.focusguard.app.ui.components.StableLinearProgress
 import com.focusguard.app.ui.screens.BlacklistScreen
 import com.focusguard.app.ui.screens.FocusScreen
 import com.focusguard.app.ui.screens.ProfileSettingsScreen
 import com.focusguard.app.ui.screens.PyqSolveScreen
+import com.focusguard.app.ui.screens.MultiScheduleScreen
+import com.focusguard.app.ui.screens.PermissionsScreen
 import com.focusguard.app.ui.screens.UsageStatsScreen
-import com.focusguard.app.ui.screens.ScheduleScreen
-import com.focusguard.app.ui.screens.DashboardScreen
+import com.focusguard.app.ui.screens.ProgressHubScreen
+import com.focusguard.app.ui.screens.ShieldHubScreen
+import com.focusguard.app.ui.screens.TodayHubScreen
+import com.focusguard.app.ui.screens.YouHubScreen
 import com.focusguard.app.ui.onboarding.OnboardingScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -88,6 +94,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             val app = application as FocusGuardApp
             var darkTheme by remember { mutableStateOf(app.prefs.isDarkThemeEnabled) }
+            var protectionArmed by remember { mutableStateOf(app.prefs.isProtectionArmed) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    protectionArmed = app.prefs.isProtectionArmed
+                    delay(750)
+                }
+            }
             FocusGuardTheme(darkTheme = darkTheme) {
                 val settingsViewModel: SettingsViewModel = viewModel(
                     factory = SettingsViewModel.factory(app.settingsRepository)
@@ -115,7 +128,20 @@ class MainActivity : ComponentActivity() {
                             .background(FrictionColors.Background),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = FrictionColors.Accent)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(FrictionColors.GlassBackground)
+                                .padding(horizontal = 18.dp, vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Preparing Focus Guard...",
+                                color = FrictionColors.TextSecondary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 } else if (authState.shouldShowLogin) {
                     LoginScreen(
@@ -139,9 +165,16 @@ class MainActivity : ComponentActivity() {
                 } else if (!disclosureAccepted) {
                     AccessibilityDisclosureScreen(
                         onAccept = {
-                            settingsViewModel.setDisclosureAccepted(true) {
-                                startGuardService()
-                            }
+                            settingsViewModel.setDisclosureAccepted(true)
+                        }
+                    )
+                } else if (!protectionArmed) {
+                    ProtectionSetupScreen(
+                        onArmProtection = {
+                            app.prefs.isProtectionArmed = true
+                            app.prefs.isServiceEnabled = true
+                            protectionArmed = true
+                            startGuardService()
                         }
                     )
                 } else {
@@ -153,30 +186,53 @@ class MainActivity : ComponentActivity() {
                     )
                     val navController = rememberNavController()
                     val backStackEntry by navController.currentBackStackEntryAsState()
-                    val currentRoute = backStackEntry?.destination?.route ?: BottomDestination.Home.route
+                    val currentRoute = backStackEntry?.destination?.route ?: BottomDestination.Today.route
                     val startDestination = remember {
                         resolveStartDestination(intent)
                     }
                     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                     val drawerScope = rememberCoroutineScope()
+                    val topLevelRoutes = remember {
+                        bottomDestinations.map { it.route }.toSet()
+                    }
+                    val selectedBottomRoute = remember(currentRoute) {
+                        when (currentRoute) {
+                            BottomDestination.Apps.route,
+                            BottomDestination.Schedule.route,
+                            BottomDestination.Permissions.route -> BottomDestination.Shield.route
+                            BottomDestination.UsageDetail.route,
+                            BottomDestination.Pyq.route -> BottomDestination.Progress.route
+                            BottomDestination.ProfileSettings.route -> BottomDestination.You.route
+                            else -> currentRoute
+                        }
+                    }
                     val drawerDestinations = remember {
                         listOf(
-                            BottomDestination.Home,
-                            BottomDestination.Focus,
-                            BottomDestination.Pyq,
-                            BottomDestination.Blocks,
+                            BottomDestination.Today,
+                            BottomDestination.Shield,
+                            BottomDestination.StartFocus,
+                            BottomDestination.Progress,
+                            BottomDestination.You,
+                            BottomDestination.Apps,
                             BottomDestination.Schedule,
-                            BottomDestination.Stats,
-                            BottomDestination.Profile
+                            BottomDestination.UsageDetail,
+                            BottomDestination.Permissions,
+                            BottomDestination.Pyq,
+                            BottomDestination.ProfileSettings
                         ).map { it.toPremiumNavItem() }
                     }
-                    val navigateTo: (String) -> Unit = { route ->
+                    val navigateToPrimary: (String) -> Unit = { route ->
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }
                             launchSingleTop = true
                             restoreState = true
+                        }
+                    }
+                    val openDetail: (String) -> Unit = { route ->
+                        navController.navigate(route) {
+                            launchSingleTop = true
                         }
                     }
 
@@ -187,7 +243,11 @@ class MainActivity : ComponentActivity() {
                                 items = drawerDestinations,
                                 currentRoute = currentRoute,
                                 onItemClick = { item ->
-                                    navigateTo(item.route)
+                                    if (item.route in topLevelRoutes) {
+                                        navigateToPrimary(item.route)
+                                    } else {
+                                        openDetail(item.route)
+                                    }
                                     drawerScope.launch { drawerState.close() }
                                 },
                                 onClose = {
@@ -201,8 +261,8 @@ class MainActivity : ComponentActivity() {
                             bottomBar = {
                                 PremiumBottomNavigation(
                                     items = bottomDestinations.map { it.toPremiumNavItem() },
-                                    currentRoute = currentRoute,
-                                    onItemClick = { item -> navigateTo(item.route) }
+                                    currentRoute = selectedBottomRoute,
+                                    onItemClick = { item -> navigateToPrimary(item.route) }
                                 )
                             }
                         ) { padding ->
@@ -211,11 +271,82 @@ class MainActivity : ComponentActivity() {
                                 startDestination = startDestination,
                                 modifier = Modifier.padding(padding)
                             ) {
-                                composable(BottomDestination.Home.route) {
-                                    DashboardScreen(
+                                composable(BottomDestination.Today.route) {
+                                    TodayHubScreen(
                                         usageStatsViewModel = usageStatsViewModel,
                                         focusSettings = focusSettings,
+                                        onOpenMenu = {
+                                            drawerScope.launch { drawerState.open() }
+                                        },
+                                        onOpenShield = {
+                                            navigateToPrimary(BottomDestination.Shield.route)
+                                        },
+                                        onOpenFocus = {
+                                            navigateToPrimary(BottomDestination.StartFocus.route)
+                                        },
+                                        onOpenProgress = {
+                                            navigateToPrimary(BottomDestination.Progress.route)
+                                        },
+                                        onOpenPyq = {
+                                            openDetail(BottomDestination.Pyq.route)
+                                        },
+                                        onOpenYou = {
+                                            navigateToPrimary(BottomDestination.You.route)
+                                        }
+                                    )
+                                }
+                                composable(BottomDestination.Shield.route) {
+                                    ShieldHubScreen(
+                                        focusSettings = focusSettings,
                                         settingsViewModel = settingsViewModel,
+                                        onOpenMenu = {
+                                            drawerScope.launch { drawerState.open() }
+                                        },
+                                        onOpenApps = {
+                                            openDetail(BottomDestination.Apps.route)
+                                        },
+                                        onOpenSchedule = {
+                                            openDetail(BottomDestination.Schedule.route)
+                                        },
+                                        onOpenPermissions = {
+                                            openDetail(BottomDestination.Permissions.route)
+                                        },
+                                        onOpenFocus = {
+                                            navigateToPrimary(BottomDestination.StartFocus.route)
+                                        }
+                                    )
+                                }
+                                composable(BottomDestination.StartFocus.route) {
+                                    val focusSessionViewModel: FocusSessionViewModel = viewModel(
+                                        factory = FocusSessionViewModel.factory(app.focusSessionRepository)
+                                    )
+                                    FocusScreen(
+                                        viewModel = focusSessionViewModel,
+                                        onOpenPyq = {
+                                            openDetail(BottomDestination.Pyq.route)
+                                        }
+                                    )
+                                }
+                                composable(BottomDestination.Progress.route) {
+                                    ProgressHubScreen(
+                                        usageStatsViewModel = usageStatsViewModel,
+                                        onOpenMenu = {
+                                            drawerScope.launch { drawerState.open() }
+                                        },
+                                        onOpenUsageDetail = {
+                                            openDetail(BottomDestination.UsageDetail.route)
+                                        },
+                                        onOpenPyq = {
+                                            openDetail(BottomDestination.Pyq.route)
+                                        },
+                                        onOpenFocus = {
+                                            navigateToPrimary(BottomDestination.StartFocus.route)
+                                        }
+                                    )
+                                }
+                                composable(BottomDestination.You.route) {
+                                    YouHubScreen(
+                                        profileViewModel = profileViewModel,
                                         isDarkTheme = darkTheme,
                                         onToggleTheme = {
                                             darkTheme = !darkTheme
@@ -224,53 +355,39 @@ class MainActivity : ComponentActivity() {
                                         onOpenMenu = {
                                             drawerScope.launch { drawerState.open() }
                                         },
-                                        onNavigateBlacklist = {
-                                            navigateTo(BottomDestination.Blocks.route)
+                                        onOpenProfileDetails = {
+                                            openDetail(BottomDestination.ProfileSettings.route)
                                         },
-                                        onNavigateUsage = {
-                                            navigateTo(BottomDestination.Stats.route)
-                                        },
-                                        onNavigateSchedule = {
-                                            navigateTo(BottomDestination.Schedule.route)
-                                        },
-                                        onNavigatePyq = {
-                                            navigateTo(BottomDestination.Pyq.route)
-                                        },
-                                        onNavigateProfile = {
-                                            navigateTo(BottomDestination.Profile.route)
+                                        onOpenPermissionHealth = {
+                                            openDetail(BottomDestination.Permissions.route)
                                         }
                                     )
                                 }
-                                composable(BottomDestination.Focus.route) {
-                                    val focusSessionViewModel: FocusSessionViewModel = viewModel(
-                                        factory = FocusSessionViewModel.factory(app.focusSessionRepository)
-                                    )
-                                    FocusScreen(
-                                        viewModel = focusSessionViewModel,
-                                        onOpenPyq = {
-                                            navigateTo(BottomDestination.Pyq.route)
-                                        }
-                                    )
-                                }
-                                composable(BottomDestination.Blocks.route) {
+                                composable(BottomDestination.Apps.route) {
                                     BlacklistScreen(
                                         onBack = {
-                                            navigateTo(BottomDestination.Home.route)
+                                            if (!navController.popBackStack()) {
+                                                navigateToPrimary(BottomDestination.Shield.route)
+                                            }
                                         }
                                     )
                                 }
-                                composable(BottomDestination.Stats.route) {
+                                composable(BottomDestination.UsageDetail.route) {
                                     UsageStatsScreen(
                                         usageStatsViewModel = usageStatsViewModel,
                                         onBack = {
-                                            navigateTo(BottomDestination.Home.route)
+                                            if (!navController.popBackStack()) {
+                                                navigateToPrimary(BottomDestination.Progress.route)
+                                            }
                                         }
                                     )
                                 }
                                 composable(BottomDestination.Schedule.route) {
-                                    ScheduleScreen(
+                                    MultiScheduleScreen(
                                         onBack = {
-                                            navigateTo(BottomDestination.Home.route)
+                                            if (!navController.popBackStack()) {
+                                                navigateToPrimary(BottomDestination.Shield.route)
+                                            }
                                         }
                                     )
                                 }
@@ -287,15 +404,29 @@ class MainActivity : ComponentActivity() {
                                         viewModel = pyqViewModel,
                                         blockedPackage = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE),
                                         onBack = {
-                                            navigateTo(BottomDestination.Home.route)
+                                            if (!navController.popBackStack()) {
+                                                navigateToPrimary(BottomDestination.Progress.route)
+                                            }
                                         }
                                     )
                                 }
-                                composable(BottomDestination.Profile.route) {
+                                composable(BottomDestination.Permissions.route) {
+                                    PermissionsScreen(
+                                        onBack = {
+                                            if (!navController.popBackStack()) {
+                                                navigateToPrimary(BottomDestination.You.route)
+                                            }
+                                        }
+                                    )
+                                }
+                                composable(BottomDestination.ProfileSettings.route) {
                                     ProfileSettingsScreen(
                                         profileViewModel = profileViewModel,
+                                        authViewModel = authViewModel,
                                         onBack = {
-                                            navigateTo(BottomDestination.Home.route)
+                                            if (!navController.popBackStack()) {
+                                                navigateToPrimary(BottomDestination.You.route)
+                                            }
                                         }
                                     )
                                 }
@@ -309,7 +440,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (FocusGuardApp.instance.prefs.hasAcceptedAccessibilityDisclosure) {
+        val prefs = FocusGuardApp.instance.prefs
+        if (prefs.hasAcceptedAccessibilityDisclosure &&
+            prefs.isProtectionArmed &&
+            prefs.isServiceEnabled
+        ) {
             startGuardService()
         }
     }
@@ -336,7 +471,7 @@ class MainActivity : ComponentActivity() {
         return if (data?.scheme == "focusguard" && data.host == "pyq") {
             BottomDestination.Pyq.route
         } else {
-            BottomDestination.Home.route
+            BottomDestination.Today.route
         }
     }
 }
@@ -392,7 +527,7 @@ fun AccessibilityDisclosureScreen(onAccept: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Distraction kholne se pehle PYQ solve karo.",
+                    text = "Block distractions during focus time.",
                     color = FrictionColors.TextSecondary,
                     fontSize = 15.sp,
                     lineHeight = 21.sp
@@ -413,19 +548,19 @@ fun AccessibilityDisclosureScreen(onAccept: () -> Unit) {
                         )
                         DisclosurePoint(
                             title = "Foreground app detection",
-                            body = "Focus Guard uses Accessibility to detect when a blocked app or distracting surface is opened during focus time."
+                            body = "Detects blocked apps during focus time."
                         )
                         DisclosurePoint(
                             title = "Visible screen structure",
-                            body = "For focused blocks, such as short-form video feeds, the app may inspect visible text, view IDs, and screen structure. This is processed on device only."
+                            body = "For Reels/Shorts rules, visible screen text and structure are checked on device."
                         )
                         DisclosurePoint(
                             title = "No personal data collection",
-                            body = "Focus Guard does not upload your screen content, messages, passwords, or personal data. Local usage and PYQ attempts are stored only for focus analytics."
+                            body = "Screen content, messages, and passwords are not uploaded."
                         )
                         DisclosurePoint(
                             title = "Your control",
-                            body = "You can stop the service by disabling Accessibility. Extra Settings exit protection is only used when you explicitly enable it for Strict Mode."
+                            body = "Disable Accessibility to stop the service."
                         )
                     }
                 }
@@ -455,6 +590,113 @@ fun AccessibilityDisclosureScreen(onAccept: () -> Unit) {
 }
 
 @Composable
+private fun ProtectionSetupScreen(onArmProtection: () -> Unit) {
+    val context = LocalContext.current
+    val permissionMonitor = remember { PermissionMonitor(context) }
+    var accessibilityReady by remember { mutableStateOf(false) }
+    var overlayReady by remember { mutableStateOf(false) }
+    var usageReady by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            accessibilityReady = permissionMonitor.isAccessibilityEnabled()
+            overlayReady = permissionMonitor.isOverlayPermitted()
+            usageReady = permissionMonitor.isUsageStatsPermitted()
+            delay(750)
+        }
+    }
+
+    val allReady = accessibilityReady && overlayReady && usageReady
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FrictionColors.Background)
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 28.dp,
+            backgroundColor = FrictionColors.GlassBackground
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Shield,
+                    contentDescription = null,
+                    tint = FrictionColors.Accent,
+                    modifier = Modifier.size(38.dp)
+                )
+                Text(
+                    text = "Finish protection setup",
+                    color = FrictionColors.TextPrimary,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Focus Guard remains off until all three permissions are enabled. This prevents an active-looking session without a visible block screen.",
+                    color = FrictionColors.TextSecondary,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+                SetupPermissionButton(
+                    label = "Accessibility",
+                    ready = accessibilityReady,
+                    onClick = {
+                        FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }
+                )
+                SetupPermissionButton(
+                    label = "Display over other apps",
+                    ready = overlayReady,
+                    onClick = {
+                        FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                        )
+                    }
+                )
+                SetupPermissionButton(
+                    label = "Usage access",
+                    ready = usageReady,
+                    onClick = {
+                        FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                    }
+                )
+                Button(
+                    onClick = onArmProtection,
+                    enabled = allReady,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FrictionColors.Accent,
+                        disabledContainerColor = FrictionColors.SurfaceElevated
+                    )
+                ) {
+                    Text(if (allReady) "Arm Focus Guard" else "Complete all permissions")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupPermissionButton(label: String, ready: Boolean, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "$label · ${if (ready) "Ready" else "Required"}",
+            color = if (ready) FrictionColors.Success else FrictionColors.TextPrimary
+        )
+    }
+}
+
+@Composable
 private fun DisclosurePoint(title: String, body: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -475,29 +717,35 @@ private fun DisclosurePoint(title: String, body: String) {
 private data class BottomDestination(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val isPrimaryCta: Boolean = false
 ) {
     companion object {
-        val Home = BottomDestination("dashboard", "Home", Icons.Rounded.Home)
-        val Focus = BottomDestination("focus", "Focus", Icons.Rounded.Timer)
-        val Blocks = BottomDestination("blacklist", "Blocks", Icons.Rounded.Block)
-        val Schedule = BottomDestination("schedule", "Schedule", Icons.Rounded.CalendarMonth)
-        val Stats = BottomDestination("usage", "Stats", Icons.Rounded.BarChart)
-        val Pyq = BottomDestination("pyq", "PYQ", Icons.Rounded.School)
-        val Profile = BottomDestination("profile", "Profile", Icons.Rounded.Settings)
+        val Today = BottomDestination("dashboard", "Today", Icons.Rounded.Home)
+        val Shield = BottomDestination("shield_home", "Shield", Icons.Rounded.Security)
+        val StartFocus = BottomDestination("focus", "Start", Icons.Rounded.Timer, isPrimaryCta = true)
+        val Progress = BottomDestination("progress_home", "Progress", Icons.Rounded.BarChart)
+        val You = BottomDestination("you_home", "You", Icons.Rounded.Person)
+
+        val Apps = BottomDestination("blacklist", "Apps to Block", Icons.Rounded.Block)
+        val Permissions = BottomDestination("permissions", "Permission Health", Icons.Rounded.AdminPanelSettings)
+        val Schedule = BottomDestination("schedule", "Schedules & Limits", Icons.Rounded.CalendarMonth)
+        val UsageDetail = BottomDestination("usage", "Analytics Detail", Icons.Rounded.BarChart)
+        val Pyq = BottomDestination("pyq", "PYQ Lab", Icons.Rounded.School)
+        val ProfileSettings = BottomDestination("profile", "Profile Details", Icons.Rounded.Settings)
     }
 }
 
 private val bottomDestinations = listOf(
-    BottomDestination.Home,
-    BottomDestination.Focus,
-    BottomDestination.Pyq,
-    BottomDestination.Blocks,
-    BottomDestination.Stats
+    BottomDestination.Today,
+    BottomDestination.Shield,
+    BottomDestination.StartFocus,
+    BottomDestination.Progress,
+    BottomDestination.You
 )
 
 private fun BottomDestination.toPremiumNavItem(): PremiumNavItem {
-    return PremiumNavItem(route = route, label = label, icon = icon)
+    return PremiumNavItem(route = route, label = label, icon = icon, isPrimaryCta = isPrimaryCta)
 }
 
 private const val EXTRA_BLOCKED_PACKAGE = "blocked_package"
@@ -582,8 +830,35 @@ fun LegacyDashboardScreen(
         }
     }
 
-    val allPermissionsGranted = accessibilityEnabled && overlayEnabled && usageStatsEnabled
-    val isActive = allPermissionsGranted && isServiceRunning
+    val coreBlockingReady = accessibilityEnabled
+    val guardWindowActive = prefs.isGuardActiveNow()
+    val fallbackReady = usageStatsEnabled && isServiceRunning
+    val isActive = coreBlockingReady && guardWindowActive
+    val statusTitle = when {
+        isActive -> "Protection Armed"
+        coreBlockingReady -> "Protection Ready"
+        else -> "Protection Incomplete"
+    }
+    val statusMessage = when {
+        isActive && fallbackReady ->
+            "Blocked apps can be interrupted now."
+        isActive ->
+            "Blocking is armed. Usage Access adds backup detection."
+        coreBlockingReady ->
+            "Start Focus or set a schedule."
+        else ->
+            "Turn on Accessibility first."
+    }
+    val statusAccentColor = when {
+        isActive -> FrictionColors.Success
+        coreBlockingReady -> FrictionColors.Warning
+        else -> FrictionColors.Accent
+    }
+    val statusBackground = when {
+        isActive -> FrictionColors.SuccessSoft
+        coreBlockingReady -> FrictionColors.WarningSoft
+        else -> FrictionColors.ErrorSoft
+    }
 
     fun enableStrictModeAfterConsent() {
         if (exitProtectionEnabled && !dpm.isAdminActive(adminComponent)) {
@@ -591,14 +866,18 @@ fun LegacyDashboardScreen(
                 putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
                 putExtra(
                     android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                    "Optional Exit Protection for Strict Mode. Focus Guard uses this only after you opt in."
+                    "Optional Strict Mode exit protection."
                 )
             }
             context.startActivity(intent)
         }
         settingsViewModel.toggleStrictMode(
             enabled = true,
-            durationMinutes = blockDuration.toInt(),
+            durationMinutes = if (exitProtectionEnabled) {
+                SettingsRepository.STRICT_HARDLOCK_MINUTES
+            } else {
+                blockDuration.toInt()
+            },
             exitProtectionEnabled = exitProtectionEnabled
         )
     }
@@ -624,7 +903,11 @@ fun LegacyDashboardScreen(
     if (showStrictModeConfirmation) {
         StrictModeConfirmationDialog(
             exitProtectionEnabled = exitProtectionEnabled,
-            durationMinutes = blockDuration.toInt(),
+            durationMinutes = if (exitProtectionEnabled) {
+                SettingsRepository.STRICT_HARDLOCK_MINUTES
+            } else {
+                blockDuration.toInt()
+            },
             onDismiss = { showStrictModeConfirmation = false },
             onConfirm = {
                 showStrictModeConfirmation = false
@@ -689,7 +972,7 @@ fun LegacyDashboardScreen(
                                 }
                             )
                             Text(
-                                text = "Fast, focused, exam-ready.",
+                                text = "Focus, block, study.",
                                 fontSize = 14.sp,
                                 color = FrictionColors.TextSecondary,
                                 letterSpacing = 0.sp
@@ -741,7 +1024,7 @@ fun LegacyDashboardScreen(
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     isActive = isActive,
-                    backgroundColor = if (isActive) FrictionColors.SuccessSoft else FrictionColors.ErrorSoft
+                    backgroundColor = statusBackground
                 ) {
                     Column(
                         modifier = Modifier
@@ -752,15 +1035,14 @@ fun LegacyDashboardScreen(
                         PulsingShield(isActive = isActive)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = if (isActive) "Protection Active" else "Protection Offline",
+                            text = statusTitle,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isActive) FrictionColors.Success else FrictionColors.Accent
+                            color = statusAccentColor
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (isActive) "All systems monitoring. Stay on track."
-                                   else "Enable permissions below to activate.",
+                            text = statusMessage,
                             fontSize = 13.sp,
                             color = FrictionColors.TextSecondary,
                             textAlign = TextAlign.Center
@@ -836,7 +1118,7 @@ fun LegacyDashboardScreen(
                                 )
                                 Text(
                                     if (isStrictMode) "Active until the timer ends"
-                                    else "Locks distracting apps for a set duration",
+                                    else "Blocks distractions for a set duration",
                                     fontSize = 12.sp,
                                     color = FrictionColors.TextSecondary
                                 )
@@ -861,8 +1143,13 @@ fun LegacyDashboardScreen(
                         Divider(color = FrictionColors.CardBorder, thickness = 0.5.dp)
                         Spacer(modifier = Modifier.height(16.dp))
 
+                        val effectiveDurationMinutes = if (exitProtectionEnabled) {
+                            SettingsRepository.STRICT_HARDLOCK_MINUTES
+                        } else {
+                            blockDuration.toInt()
+                        }
                         Text(
-                            "Duration: ${blockDuration.toInt()} min",
+                            "Duration: ${formatStrictModeDuration(effectiveDurationMinutes)}",
                             color = FrictionColors.TextPrimary,
                             fontWeight = FontWeight.Medium,
                             fontSize = 14.sp
@@ -876,10 +1163,10 @@ fun LegacyDashboardScreen(
                             },
                             valueRange = 10f..180f,
                             steps = 17,
-                            enabled = !isStrictMode,
+                            enabled = !isStrictMode && !exitProtectionEnabled,
                             colors = SliderDefaults.colors(
-                                thumbColor = if (isStrictMode) FrictionColors.TextMuted else FrictionColors.Accent,
-                                activeTrackColor = if (isStrictMode) FrictionColors.TextMuted else FrictionColors.Accent,
+                                thumbColor = if (isStrictMode || exitProtectionEnabled) FrictionColors.TextMuted else FrictionColors.Accent,
+                                activeTrackColor = if (isStrictMode || exitProtectionEnabled) FrictionColors.TextMuted else FrictionColors.Accent,
                                 inactiveTrackColor = FrictionColors.SurfaceElevated
                             )
                         )
@@ -913,7 +1200,7 @@ fun LegacyDashboardScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Optional. During Strict Mode only, Focus Guard can return you home if you open Settings or app-removal screens before the timer ends.",
+                                    text = "Optional. During Strict Mode, removal screens return to Home.",
                                     color = FrictionColors.TextSecondary,
                                     fontSize = 12.sp,
                                     lineHeight = 17.sp
@@ -931,7 +1218,7 @@ fun LegacyDashboardScreen(
                                     .padding(12.dp)
                             ) {
                                 Text(
-                                    text = "By enabling Exit Protection, you agree that Settings and app-removal screens may be interrupted only while Strict Mode is active.",
+                                    text = "Hardlock duration is 30 days while Exit Protection is enabled.",
                                     color = FrictionColors.Warning,
                                     fontSize = 12.sp,
                                     lineHeight = 17.sp
@@ -953,8 +1240,12 @@ fun LegacyDashboardScreen(
                     icon = Icons.Outlined.Accessibility,
                     title = "Accessibility",
                     subtitle = "Detects distracting apps",
-                    isGranted = accessibilityEnabled
-                ) { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                    isGranted = accessibilityEnabled,
+                    isRequired = true
+                ) {
+                    FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
             }
 
             item {
@@ -964,6 +1255,7 @@ fun LegacyDashboardScreen(
                     subtitle = "Shows blocking screen",
                     isGranted = overlayEnabled
                 ) {
+                    FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
                     context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
                 }
             }
@@ -972,18 +1264,22 @@ fun LegacyDashboardScreen(
                 PermissionRow(
                     icon = Icons.Outlined.QueryStats,
                     title = "Usage Stats",
-                    subtitle = "Tracks app usage time",
+                    subtitle = "Backup detection",
                     isGranted = usageStatsEnabled
-                ) { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+                ) {
+                    FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                }
             }
 
             item {
                 PermissionRow(
                     icon = Icons.Outlined.BatteryAlert,
                     title = "Keep Alive",
-                    subtitle = "Prevent system from killing app",
+                    subtitle = "Keep background guard alive",
                     isGranted = !batteryOptimized
                 ) {
+                    FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
                     val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                     context.startActivity(intent)
                 }
@@ -993,9 +1289,10 @@ fun LegacyDashboardScreen(
                 PermissionRow(
                     icon = Icons.Outlined.Autorenew,
                     title = "Auto Start (OnePlus/Oppo/Xiaomi)",
-                    subtitle = "Required to start after reboot",
+                    subtitle = "Restart after reboot",
                     isGranted = false // Hard to detect, always show as an action
                 ) {
+                    FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
                     try {
                         // ColorOS / Auto Start
                         val intent = Intent().apply {
@@ -1043,7 +1340,8 @@ fun LegacyDashboardScreen(
                     icon = Icons.Outlined.Schedule,
                     title = "Block Schedule",
                     subtitle = if (prefs.isScheduleEnabled) {
-                        if (prefs.isWithinSchedule()) "Active now" else "Enabled"
+                        prefs.getActiveStudyBlock()?.let { "Active: ${it.title}" }
+                            ?: "${prefs.studyBlocks.count { it.enabled }} study block(s)"
                     } else "Not configured",
                     accentColor = FrictionColors.Warning,
                     onClick = onNavigateSchedule
@@ -1160,7 +1458,7 @@ fun HomeFocusSummary(
                         Text("Start Solving", fontWeight = FontWeight.Bold)
                     }
                 }
-                LinearProgressIndicator(
+                StableLinearProgress(
                     progress = progress,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1224,8 +1522,25 @@ fun PermissionRow(
     title: String,
     subtitle: String,
     isGranted: Boolean,
+    isRequired: Boolean = false,
     onClick: () -> Unit
 ) {
+    val statusText = when {
+        isGranted -> "Active"
+        isRequired -> "Required"
+        else -> "Optional"
+    }
+    val statusColor = when {
+        isGranted -> FrictionColors.Success
+        isRequired -> FrictionColors.Warning
+        else -> FrictionColors.TextMuted
+    }
+    val statusBackground = when {
+        isGranted -> FrictionColors.SuccessSoft
+        isRequired -> FrictionColors.WarningSoft
+        else -> FrictionColors.SurfaceElevated
+    }
+
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick
@@ -1240,16 +1555,13 @@ fun PermissionRow(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (isGranted) FrictionColors.SuccessSoft
-                        else FrictionColors.WarningSoft
-                    ),
+                    .background(statusBackground),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     icon,
                     contentDescription = null,
-                    tint = if (isGranted) FrictionColors.Success else FrictionColors.Warning,
+                    tint = statusColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1270,17 +1582,14 @@ fun PermissionRow(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (isGranted) FrictionColors.SuccessSoft
-                        else FrictionColors.WarningSoft
-                    )
+                    .background(statusBackground)
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = if (isGranted) "Active" else "Required",
+                    text = statusText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isGranted) FrictionColors.Success else FrictionColors.Warning
+                    color = statusColor
                 )
             }
         }
@@ -1404,6 +1713,22 @@ fun greetingText(): String {
     }
 }
 
+private fun formatStrictModeDuration(minutes: Int): String {
+    val days = minutes / (24 * 60)
+    val remainingMinutes = minutes % (24 * 60)
+    val hours = remainingMinutes / 60
+    val mins = remainingMinutes % 60
+
+    return when {
+        days > 0 && hours == 0 && mins == 0 -> "$days days"
+        days > 0 && mins == 0 -> "$days days ${hours}h"
+        days > 0 -> "$days days ${hours}h ${mins}m"
+        hours > 0 && mins == 0 -> "${hours}h"
+        hours > 0 -> "${hours}h ${mins}m"
+        else -> "$mins min"
+    }
+}
+
 @Composable
 fun StrictModeConfirmationDialog(
     exitProtectionEnabled: Boolean,
@@ -1423,19 +1748,17 @@ fun StrictModeConfirmationDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Strict Mode will run for $durationMinutes minutes.",
+                    text = "Strict Mode will run for ${formatStrictModeDuration(durationMinutes)}.",
                     color = FrictionColors.TextPrimary,
                     fontSize = 14.sp
                 )
                 Text(
                     text = buildString {
-                        append("- Block distracting apps\n")
-                        append("- Show focus challenges before access\n")
                         append(
                             if (exitProtectionEnabled) {
-                                "- Lock Settings and interrupt app-removal attempts while active"
+                                "Exit protection is on."
                             } else {
-                                "- Keep Exit Protection off"
+                                "Exit protection is off."
                             }
                         )
                     },
@@ -1444,7 +1767,7 @@ fun StrictModeConfirmationDialog(
                     lineHeight = 19.sp
                 )
                 Text(
-                    text = "Enable only if you are serious about focus. You can use this protection only after accepting the Accessibility disclosure.",
+                    text = "You can stop Strict Mode after the timer ends.",
                     color = FrictionColors.Warning,
                     fontSize = 12.sp,
                     lineHeight = 17.sp

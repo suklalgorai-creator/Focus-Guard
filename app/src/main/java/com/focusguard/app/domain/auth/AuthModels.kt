@@ -51,7 +51,19 @@ data class FocusScheduleSnapshot(
     val startMinute: Int,
     val endHour: Int,
     val endMinute: Int,
-    val days: Set<Int>
+    val days: Set<Int>,
+    val blocks: List<StudyBlockScheduleSnapshot> = emptyList()
+)
+
+data class StudyBlockScheduleSnapshot(
+    val id: String,
+    val title: String,
+    val startHour: Int,
+    val startMinute: Int,
+    val endHour: Int,
+    val endMinute: Int,
+    val days: Set<Int>,
+    val enabled: Boolean
 )
 
 data class RemoteUserSettings(

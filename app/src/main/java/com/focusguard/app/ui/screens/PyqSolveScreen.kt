@@ -23,10 +23,8 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,6 +47,7 @@ import com.focusguard.app.domain.pyq.PyqSelectionReason
 import com.focusguard.app.presentation.pyq.PyqUiState
 import com.focusguard.app.presentation.pyq.PyqViewModel
 import com.focusguard.app.ui.components.GlassCard
+import com.focusguard.app.ui.components.StableLinearProgress
 import com.focusguard.app.ui.theme.FrictionColors
 
 @Composable
@@ -395,7 +394,7 @@ private fun ProgressStrip(state: PyqUiState) {
                     fontWeight = FontWeight.Bold
                 )
             }
-            LinearProgressIndicator(
+            StableLinearProgress(
                 progress = progress,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -434,7 +433,43 @@ private fun ContextChip(text: String) {
 @Composable
 private fun LoadingState() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = FrictionColors.Accent)
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            cornerRadius = 24.dp,
+            backgroundColor = FrictionColors.GlassBackground
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Preparing your focus challenge",
+                    color = FrictionColors.TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Solve this PYQ instead of wasting time.",
+                    color = FrictionColors.TextSecondary,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+                StableLinearProgress(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(100.dp)),
+                    color = FrictionColors.Accent,
+                    trackColor = FrictionColors.SurfaceElevated
+                )
+            }
+        }
     }
 }
 

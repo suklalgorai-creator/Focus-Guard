@@ -8,6 +8,7 @@ import com.focusguard.app.domain.auth.FocusScheduleSnapshot
 import com.focusguard.app.domain.auth.LocalUserSettings
 import com.focusguard.app.domain.auth.RemoteUserSettings
 import com.focusguard.app.persistence.FocusGuardPrefs
+import com.focusguard.app.persistence.StudyBlockSchedule
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -113,6 +114,16 @@ class AuthRepository(
         )
     }
 
+    fun showLoginPrompt() {
+        sessionStore.setLoginPromptSkipped(false)
+        _state.value = AuthUiState(
+            isInitializing = false,
+            isLoading = false,
+            hasSkippedLogin = false,
+            isConfigured = config.isConfigured
+        )
+    }
+
     suspend fun signOut() {
         val existing = sessionStore.loadSession()
         existing?.accessToken?.let { token ->
@@ -140,6 +151,17 @@ class AuthRepository(
         _state.update { it.copy(errorMessage = null) }
     }
 
+    fun reportUnexpectedError(exception: Throwable) {
+        _state.update {
+            it.copy(
+                isInitializing = false,
+                isLoading = false,
+                errorMessage = userFacingError(exception),
+                isConfigured = config.isConfigured
+            )
+        }
+    }
+
     private suspend fun authenticateWithEmail(
         email: String,
         password: String,
@@ -148,7 +170,12 @@ class AuthRepository(
     ) {
         val normalizedEmail = email.trim()
         val trimmedName = name?.trim()?.takeIf { it.isNotBlank() }
-        val validationError = validateEmailPassword(normalizedEmail, password)
+        val validationError = validateEmailPassword(
+            email = normalizedEmail,
+            password = password,
+            name = trimmedName,
+            createAccount = createAccount
+        )
         if (validationError != null) {
             _state.update { it.copy(errorMessage = validationError) }
             return
@@ -199,9 +226,16 @@ class AuthRepository(
         }
     }
 
-    private fun validateEmailPassword(email: String, password: String): String? {
+    private fun validateEmailPassword(
+        email: String,
+        password: String,
+        name: String?,
+        createAccount: Boolean
+    ): String? {
         return when {
             !config.isConfigured -> "Supabase auth is not configured for this build."
+            createAccount && (name == null || name.length < 2) ->
+                "Enter a valid name."
             email.isBlank() || !email.contains("@") || !email.contains(".") ->
                 "Enter a valid email address."
             password.length < 8 ->
@@ -288,14 +322,27 @@ class AuthRepository(
     private fun applyRemoteSettings(remote: RemoteUserSettings) {
         remote.blockedApps?.let { prefs.blacklistedApps = it }
         remote.focusSchedule?.let { schedule ->
+            val days = schedule.days.filter { it in 1..7 }.toSet().ifEmpty {
+                setOf(2, 3, 4, 5, 6, 7)
+            }
             prefs.isScheduleEnabled = schedule.enabled
             prefs.scheduleStartHour = schedule.startHour.coerceIn(0, 23)
             prefs.scheduleStartMinute = schedule.startMinute.coerceIn(0, 59)
             prefs.scheduleEndHour = schedule.endHour.coerceIn(0, 23)
             prefs.scheduleEndMinute = schedule.endMinute.coerceIn(0, 59)
-            prefs.scheduleDays = schedule.days.filter { it in 1..7 }.toSet().ifEmpty {
-                setOf(2, 3, 4, 5, 6, 7)
-            }
+            prefs.scheduleDays = days
+            prefs.studyBlocks = listOf(
+                StudyBlockSchedule(
+                    id = "remote-main",
+                    title = "Study Block 1",
+                    startHour = schedule.startHour.coerceIn(0, 23),
+                    startMinute = schedule.startMinute.coerceIn(0, 59),
+                    endHour = schedule.endHour.coerceIn(0, 23),
+                    endMinute = schedule.endMinute.coerceIn(0, 59),
+                    days = days,
+                    enabled = true
+                )
+            )
         }
     }
 
@@ -303,6 +350,7 @@ class AuthRepository(
         return when (exception) {
             is AuthException -> exception.message
             is SupabaseException -> exception.message
+            is IllegalStateException -> exception.message ?: "Something went wrong while opening auth. Please try again."
             else -> exception.message ?: "Authentication failed. Please try again."
         }
     }

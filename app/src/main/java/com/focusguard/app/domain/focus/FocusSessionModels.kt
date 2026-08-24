@@ -22,7 +22,8 @@ data class FocusSessionState(
     val sessionXp: Int = 0,
     val totalXp: Int = 0,
     val streakDays: Int = 0,
-    val badges: List<FocusBadge> = emptyList()
+    val badges: List<FocusBadge> = emptyList(),
+    val isAccountabilityLockActive: Boolean = false
 ) {
     val elapsedMillis: Long
         get() = (durationMillis - remainingMillis).coerceAtLeast(0L)

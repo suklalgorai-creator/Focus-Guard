@@ -16,19 +16,19 @@ class AuthViewModel(
     val state: StateFlow<AuthUiState> = authRepository.state
 
     fun signIn(activity: Activity) {
-        viewModelScope.launch {
+        launchAuthAction {
             authRepository.signIn(activity)
         }
     }
 
     fun signInWithEmail(email: String, password: String) {
-        viewModelScope.launch {
+        launchAuthAction {
             authRepository.signInWithEmail(email, password)
         }
     }
 
     fun signUpWithEmail(email: String, password: String, name: String?) {
-        viewModelScope.launch {
+        launchAuthAction {
             authRepository.signUpWithEmail(email, password, name)
         }
     }
@@ -37,20 +37,34 @@ class AuthViewModel(
         authRepository.continueWithoutAccount()
     }
 
+    fun showLogin() {
+        authRepository.showLoginPrompt()
+    }
+
     fun signOut() {
-        viewModelScope.launch {
+        launchAuthAction {
             authRepository.signOut()
         }
     }
 
     fun syncUserSettings() {
-        viewModelScope.launch {
+        launchAuthAction {
             authRepository.syncUserSettings()
         }
     }
 
     fun clearError() {
         authRepository.clearError()
+    }
+
+    private fun launchAuthAction(action: suspend () -> Unit) {
+        viewModelScope.launch {
+            runCatching {
+                action()
+            }.onFailure { exception ->
+                authRepository.reportUnexpectedError(exception)
+            }
+        }
     }
 
     companion object {

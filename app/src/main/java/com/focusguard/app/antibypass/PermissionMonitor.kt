@@ -38,19 +38,32 @@ class PermissionMonitor(private val context: Context) {
 
         val prefs = FocusGuardApp.instance.prefs
 
-        if (!allOk) {
+        if (!allOk && prefs.isProtectionArmed) {
             Log.w(TAG, "Permission check FAILED: " +
                     "accessibility=$accessibilityOk, overlay=$overlayOk, usageStats=$usageStatsOk")
 
             if (!prefs.lastPermissionCheckFailed) {
                 // First failure — apply penalty and notify
                 prefs.lastPermissionCheckFailed = true
-                prefs.bypassPenalty = prefs.bypassPenalty + 1
+                FocusGuardApp.instance.antiBypassManager.recordPermissionLoss(
+                    accessibilityOk = accessibilityOk,
+                    overlayOk = overlayOk,
+                    usageStatsOk = usageStatsOk
+                )
                 showPermissionAlert(accessibilityOk, overlayOk, usageStatsOk)
             }
+            // Do not leave a session marked active when no visible block can
+            // be delivered. The setup gate will require all access again.
+            prefs.pauseProtectionForMissingPermission()
         } else {
             prefs.lastPermissionCheckFailed = false
         }
+    }
+
+    fun hasAllRequiredPermissions(): Boolean {
+        return isAccessibilityEnabled() &&
+            isOverlayPermitted() &&
+            isUsageStatsPermitted()
     }
 
     fun isAccessibilityEnabled(): Boolean {

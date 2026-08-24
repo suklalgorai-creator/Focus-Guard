@@ -91,7 +91,7 @@ class UsageRepository(
     }
 
     suspend fun recordBlockedSession(packageName: String) {
-        if (packageName !in prefs.blacklistedApps) return
+        if (!isDistractingPackage(packageName)) return
 
         writeMutex.withLock {
             val now = System.currentTimeMillis()
@@ -217,7 +217,7 @@ class UsageRepository(
             packageName = row.packageName,
             appName = appLabel(row.packageName),
             usageTimeMs = row.usageTimeMs,
-            isBlacklisted = row.distractingSessionCount > 0 || row.packageName in prefs.blacklistedApps,
+            isBlacklisted = row.distractingSessionCount > 0 || isDistractingPackage(row.packageName),
             sessionCount = row.sessionCount.toInt()
         )
     }
@@ -238,6 +238,10 @@ class UsageRepository(
     private fun invalidateUsageCacheLocked() {
         cachedUsageSnapshot = null
         cachedUsageSnapshotAtMs = 0L
+    }
+
+    private fun isDistractingPackage(packageName: String): Boolean {
+        return packageName in prefs.blacklistedApps
     }
 
     companion object {

@@ -39,6 +39,7 @@ class EscalationEngine {
 
         // Increment daily attempt count (auto-resets on new day)
         val attemptNumber = prefs.incrementDailyAttempt()
+        prefs.updateStreakOnNewDay()
 
         // Base escalation from attempt count
         val baseLevel = when (attemptNumber) {

@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.focusguard.app.domain.pyq.PyqQuestion
 import org.json.JSONObject
-import kotlin.random.Random
+import java.util.Locale
 
 /**
  * Loads exam questions from assets/exam_questions.json and serves them
@@ -26,6 +26,7 @@ object QuestionRepository {
     )
 
     private var allQuestions: List<ExamQuestion> = emptyList()
+    private var questionsBySubject: Map<String, List<ExamQuestion>> = emptyMap()
     private var cachedPyqQuestions: List<PyqQuestion> = emptyList()
     private val shownIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
     private var currentExamId: String = "neet"
@@ -36,18 +37,29 @@ object QuestionRepository {
      * Call this once at app startup.
      */
     fun initialize(context: Context, examId: String) {
-        currentExamId = examId
+        synchronized(this) {
+            currentExamId = examId
+        }
         loadQuestions(context, examId)
-        isInitialized = true
+        synchronized(this) {
+            isInitialized = true
+        }
     }
 
     /**
      * Switch to a different exam and reload questions.
      */
     fun switchExam(context: Context, examId: String) {
-        if (examId == currentExamId && isInitialized) return
-        currentExamId = examId
-        shownIds.clear()
+        val shouldLoad = synchronized(this) {
+            if (examId == currentExamId && isInitialized) {
+                false
+            } else {
+                currentExamId = examId
+                shownIds.clear()
+                true
+            }
+        }
+        if (!shouldLoad) return
         loadQuestions(context, examId)
     }
 
@@ -55,22 +67,22 @@ object QuestionRepository {
      * Get a random question that hasn't been shown yet.
      * If all questions have been shown, resets and starts fresh.
      */
-    fun getRandomQuestion(subject: String? = null): ExamQuestion? {
+    fun getRandomQuestion(subject: String? = null): ExamQuestion? = synchronized(this) {
         if (allQuestions.isEmpty()) {
             Log.e(TAG, "No questions loaded!")
-            return null
+            return@synchronized null
         }
 
         // Filter by subject if specified
         val pool = if (subject != null) {
-            allQuestions.filter { it.subject.equals(subject, ignoreCase = true) }
+            questionsBySubject[subject.lowercase(Locale.US)].orEmpty()
         } else {
             allQuestions
         }
 
         if (pool.isEmpty()) {
             Log.w(TAG, "No questions for subject: $subject")
-            return allQuestions.random() // Fallback to any question
+            return@synchronized allQuestions.random().also { shownIds.add(it.id) }
         }
 
         // Find unshown questions
@@ -80,46 +92,42 @@ object QuestionRepository {
             // All questions shown — reset and start fresh
             Log.d(TAG, "All ${pool.size} questions exhausted. Resetting.")
             shownIds.clear()
-            return pool.random().also { shownIds.add(it.id) }
+            return@synchronized pool.random().also { shownIds.add(it.id) }
         }
 
         val question = unshown.random()
         shownIds.add(question.id)
         Log.d(TAG, "Serving question #${question.id} (${question.subject}, ${question.year}). " +
                 "Shown: ${shownIds.size}/${allQuestions.size}")
-        return question
+        question
     }
 
     /**
      * Get total loaded question count.
      */
-    fun getQuestionCount(): Int = allQuestions.size
+    fun getQuestionCount(): Int = synchronized(this) { allQuestions.size }
 
-    fun getAllPyqQuestions(): List<PyqQuestion> {
-        cachedPyqQuestions.takeIf { it.isNotEmpty() }?.let { return it }
-
-        return synchronized(this) {
-            cachedPyqQuestions.takeIf { it.isNotEmpty() } ?: allQuestions.map { question ->
-                PyqQuestion(
-                    id = question.id,
-                    exam = currentExamId,
-                    subject = question.subject,
-                    topic = null,
-                    difficulty = inferDifficulty(question.subject),
-                    year = question.year,
-                    question = question.question,
-                    options = question.options,
-                    correctAnswer = question.answer,
-                    explanation = question.explanation
-                )
-            }.also { cachedPyqQuestions = it }
-        }
+    fun getAllPyqQuestions(): List<PyqQuestion> = synchronized(this) {
+        cachedPyqQuestions.takeIf { it.isNotEmpty() } ?: allQuestions.map { question ->
+            PyqQuestion(
+                id = question.id,
+                exam = currentExamId,
+                subject = question.subject,
+                topic = null,
+                difficulty = inferDifficulty(question.subject),
+                year = question.year,
+                question = question.question,
+                options = question.options,
+                correctAnswer = question.answer,
+                explanation = question.explanation
+            )
+        }.also { cachedPyqQuestions = it }
     }
 
     /**
      * Get current exam name.
      */
-    fun getExamName(): String = currentExamId.uppercase()
+    fun getExamName(): String = synchronized(this) { currentExamId.uppercase() }
 
     private fun inferDifficulty(subject: String): Int {
         return when (subject.lowercase()) {
@@ -165,13 +173,19 @@ object QuestionRepository {
                 )
             }
 
-            allQuestions = questions
-            cachedPyqQuestions = emptyList()
+            synchronized(this) {
+                allQuestions = questions
+                questionsBySubject = questions.groupBy { it.subject.lowercase(Locale.US) }
+                cachedPyqQuestions = emptyList()
+                shownIds.clear()
+            }
             Log.d(TAG, "Loaded ${questions.size} questions for exam: $examId")
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load questions: ${e.message}", e)
-            cachedPyqQuestions = emptyList()
+            synchronized(this) {
+                cachedPyqQuestions = emptyList()
+            }
         }
     }
 }

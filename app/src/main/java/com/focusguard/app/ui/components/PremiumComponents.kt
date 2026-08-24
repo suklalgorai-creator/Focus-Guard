@@ -52,7 +52,8 @@ import com.focusguard.app.ui.theme.FrictionColors
 data class PremiumNavItem(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val isPrimaryCta: Boolean = false
 )
 
 @Composable
@@ -62,7 +63,7 @@ fun GradientButton(
     enabled: Boolean = true,
     leadingIcon: ImageVector? = null,
     height: Dp = 54.dp,
-    cornerRadius: Dp = 18.dp,
+    cornerRadius: Dp = 16.dp,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -84,7 +85,7 @@ fun GradientButton(
             .height(height)
             .scale(scale)
             .shadow(
-                elevation = if (enabled) 16.dp else 0.dp,
+                elevation = if (enabled) 10.dp else 0.dp,
                 shape = shape,
                 clip = false,
                 ambientColor = shadowColor,
@@ -151,9 +152,9 @@ fun SecondaryButton(
         modifier = modifier
             .height(52.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(FrictionColors.GlassBackground)
-            .border(0.8.dp, FrictionColors.GlassBorder, RoundedCornerShape(16.dp))
+            .border(0.8.dp, FrictionColors.GlassBorder, RoundedCornerShape(14.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
@@ -184,7 +185,7 @@ fun SecondaryButton(
 @Composable
 fun SurfaceCard(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
+    cornerRadius: Dp = 14.dp,
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
@@ -199,7 +200,7 @@ fun SurfaceCard(
     val base = modifier
         .scale(scale)
         .shadow(
-            elevation = if (FrictionColors.useDarkPalette) 8.dp else 12.dp,
+            elevation = if (FrictionColors.useDarkPalette) 6.dp else 8.dp,
             shape = shape,
             ambientColor = Color.Black.copy(alpha = if (FrictionColors.useDarkPalette) 0.16f else 0.08f),
             spotColor = Color.Black.copy(alpha = if (FrictionColors.useDarkPalette) 0.12f else 0.06f)
@@ -305,7 +306,7 @@ fun StatItem(
     modifier: Modifier = Modifier,
     accent: Color = FrictionColors.Accent
 ) {
-    SurfaceCard(modifier = modifier, cornerRadius = 18.dp) {
+    SurfaceCard(modifier = modifier, cornerRadius = 14.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -315,7 +316,7 @@ fun StatItem(
             Box(
                 modifier = Modifier
                     .size(38.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(accent.copy(alpha = 0.13f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -361,9 +362,9 @@ fun PremiumIconButton(
         modifier = modifier
             .size(46.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(FrictionColors.GlassBackground)
-            .border(0.7.dp, FrictionColors.GlassBorder, RoundedCornerShape(16.dp))
+            .border(0.7.dp, FrictionColors.GlassBorder, RoundedCornerShape(14.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
@@ -392,14 +393,14 @@ fun PremiumBottomNavigation(
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 10.dp)
             .shadow(
-                elevation = if (FrictionColors.useDarkPalette) 22.dp else 16.dp,
-                shape = RoundedCornerShape(28.dp),
+                elevation = if (FrictionColors.useDarkPalette) 14.dp else 10.dp,
+                shape = RoundedCornerShape(22.dp),
                 ambientColor = Color.Black.copy(alpha = if (FrictionColors.useDarkPalette) 0.32f else 0.10f),
                 spotColor = Color.Black.copy(alpha = if (FrictionColors.useDarkPalette) 0.26f else 0.08f)
             )
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(FrictionColors.GlassBackground)
-            .border(0.8.dp, FrictionColors.GlassBorder, RoundedCornerShape(28.dp))
+            .border(0.8.dp, FrictionColors.GlassBorder, RoundedCornerShape(22.dp))
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -422,26 +423,40 @@ private fun PremiumNavItemView(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isPrimary = item.isPrimaryCta
     val background by animateColorAsState(
-        targetValue = if (selected) FrictionColors.AccentSoft else Color.Transparent,
+        targetValue = if (!isPrimary && selected) FrictionColors.AccentSoft else Color.Transparent,
         animationSpec = tween(220),
         label = "nav-bg"
     )
     val iconColor by animateColorAsState(
-        targetValue = if (selected) FrictionColors.Accent else FrictionColors.TextMuted,
+        targetValue = when {
+            isPrimary -> Color.White
+            selected -> FrictionColors.Accent
+            else -> FrictionColors.TextMuted
+        },
         animationSpec = tween(220),
         label = "nav-icon"
     )
     val width by animateDpAsState(
-        targetValue = if (selected) 68.dp else 48.dp,
+        targetValue = when {
+            isPrimary -> 54.dp
+            selected -> 68.dp
+            else -> 48.dp
+        },
         animationSpec = spring(dampingRatio = 0.8f, stiffness = 460f),
         label = "nav-pill-width"
+    )
+    val height by animateDpAsState(
+        targetValue = if (isPrimary) 54.dp else 34.dp,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 460f),
+        label = "nav-pill-height"
     )
 
     Column(
         modifier = modifier
-            .height(58.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .height(if (isPrimary) 66.dp else 58.dp)
+            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -449,24 +464,49 @@ private fun PremiumNavItemView(
         Box(
             modifier = Modifier
                 .width(width)
-                .height(34.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(background),
+                .height(height)
+                .shadow(
+                    elevation = if (isPrimary) 14.dp else 0.dp,
+                    shape = if (isPrimary) CircleShape else RoundedCornerShape(14.dp),
+                    ambientColor = if (isPrimary) FrictionColors.Accent.copy(alpha = 0.28f) else Color.Transparent,
+                    spotColor = if (isPrimary) FrictionColors.Accent.copy(alpha = 0.24f) else Color.Transparent
+                )
+                .clip(if (isPrimary) CircleShape else RoundedCornerShape(14.dp))
+                .background(
+                    if (isPrimary) {
+                        Brush.linearGradient(FrictionColors.AccentGradient)
+                    } else {
+                        Brush.linearGradient(listOf(background, background))
+                    }
+                )
+                .border(
+                    width = if (isPrimary) 1.dp else 0.dp,
+                    color = if (isPrimary) Color.White.copy(alpha = 0.18f) else Color.Transparent,
+                    shape = if (isPrimary) CircleShape else RoundedCornerShape(14.dp)
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
                 tint = iconColor,
-                modifier = Modifier.size(21.dp)
+                modifier = Modifier.size(if (isPrimary) 24.dp else 21.dp)
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(if (isPrimary) 4.dp else 2.dp))
         Text(
             text = item.label,
-            color = if (selected) FrictionColors.TextPrimary else FrictionColors.TextMuted,
+            color = when {
+                isPrimary -> FrictionColors.TextPrimary
+                selected -> FrictionColors.TextPrimary
+                else -> FrictionColors.TextMuted
+            },
             fontSize = 10.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            fontWeight = when {
+                isPrimary -> FontWeight.Bold
+                selected -> FontWeight.Bold
+                else -> FontWeight.Medium
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -546,7 +586,7 @@ fun PremiumDrawerContent(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 18.dp,
+            cornerRadius = 14.dp,
             backgroundColor = FrictionColors.GlassBackground
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -582,7 +622,7 @@ private fun DrawerItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 13.dp),

@@ -1,5 +1,8 @@
 package com.focusguard.app.ui.screens
 
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,9 +27,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,55 +44,75 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.domain.InstalledAppInfo
 import com.focusguard.app.friction.tasks.QuestionRepository
 import com.focusguard.app.persistence.FocusGuardPrefs
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.theme.FrictionColors
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private data class FocusedSurfaceOption(
     val surfaceId: String,
     val title: String,
     val subtitle: String,
-    val packageName: String
+    val packageName: String,
+    val wholeAppBlockedMessage: String = "Whole app is already blacklisted, so this acts as a backup."
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BlacklistScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
     val prefs = FocusGuardApp.instance.prefs
-    val packageManager = context.packageManager
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var blacklistedSet by remember { mutableStateOf(prefs.blacklistedApps.toMutableSet()) }
     var blockedSurfaces by remember { mutableStateOf(prefs.blockedContentSurfaces.toMutableSet()) }
+    var productiveChannels by remember { mutableStateOf(prefs.youtubeProductiveChannels.toMutableSet()) }
+    var distractingChannels by remember { mutableStateOf(prefs.youtubeDistractingChannels.toMutableSet()) }
+    var installedApps by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
+    var isLoadingApps by remember { mutableStateOf(true) }
+    var appRefreshSignal by remember { mutableStateOf(0) }
 
     val isLocked = prefs.isGuardActiveNow()
 
-    val installedApps = remember {
-        packageManager.getInstalledApplications(0)
-            .filter { app ->
-                packageManager.getLaunchIntentForPackage(app.packageName) != null &&
-                    app.packageName != "com.focusguard.app"
+    LaunchedEffect(appContext, appRefreshSignal) {
+        isLoadingApps = true
+        installedApps = try {
+            withContext(Dispatchers.IO) {
+                loadInstalledApps(appContext)
             }
-            .map { app ->
-                InstalledAppInfo(
-                    packageName = app.packageName,
-                    appName = packageManager.getApplicationLabel(app).toString(),
-                    icon = try {
-                        packageManager.getApplicationIcon(app.packageName)
-                    } catch (_: Exception) {
-                        null
-                    }
-                )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+        isLoadingApps = false
+    }
+
+    DisposableEffect(lifecycleOwner, appContext) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                appRefreshSignal += 1
             }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     val installedPackageNames = remember(installedApps) {
@@ -95,9 +121,6 @@ fun BlacklistScreen(onBack: () -> Unit) {
 
     val suggestedPackages = remember {
         setOf(
-            "com.instagram.android",
-            "com.instagram.lite",
-            "com.google.android.youtube",
             "com.zhiliaoapp.musically",
             "com.snapchat.android",
             "com.twitter.android",
@@ -123,18 +146,35 @@ fun BlacklistScreen(onBack: () -> Unit) {
             else -> null
         }
 
-        if (instagramPackage == null) {
-            emptyList()
-        } else {
-            listOf(
-                FocusedSurfaceOption(
-                    surfaceId = FocusGuardPrefs.SURFACE_INSTAGRAM_REELS,
-                    title = "Instagram Reels",
-                    subtitle = "Keep Instagram usable, but kick users out of Reels during focus hours.",
-                    packageName = instagramPackage
+        buildList {
+            if (instagramPackage != null) {
+                add(
+                    FocusedSurfaceOption(
+                        surfaceId = FocusGuardPrefs.SURFACE_INSTAGRAM_REELS,
+                        title = "Instagram Reels",
+                        subtitle = "Instagram opens. Reels are blocked.",
+                        packageName = instagramPackage,
+                        wholeAppBlockedMessage = "Instagram is fully blocked. Turn this on for Reels-only mode."
+                    )
                 )
-            )
+            }
+
+            if ("com.google.android.youtube" in installedPackageNames) {
+                add(
+                    FocusedSurfaceOption(
+                        surfaceId = FocusGuardPrefs.SURFACE_YOUTUBE_SHORTS,
+                        title = "YouTube Shorts",
+                        subtitle = "YouTube opens. Shorts are blocked.",
+                        packageName = "com.google.android.youtube",
+                        wholeAppBlockedMessage = "YouTube is fully blocked. Unblock it to use channel rules."
+                    )
+                )
+            }
         }
+    }
+
+    val surfaceManagedPackages = remember(focusedSurfaceOptions) {
+        focusedSurfaceOptions.map { it.packageName }.toSet()
     }
 
     val filteredApps = remember(searchQuery, installedApps, blacklistedSet) {
@@ -157,7 +197,10 @@ fun BlacklistScreen(onBack: () -> Unit) {
     }
 
     val otherApps = if (searchQuery.isBlank()) {
-        filteredApps.filter { it.packageName !in suggestedPackages }
+        filteredApps.filter { app ->
+            app.packageName !in suggestedPackages &&
+                app.packageName !in surfaceManagedPackages
+        }
     } else {
         filteredApps
     }
@@ -207,8 +250,8 @@ fun BlacklistScreen(onBack: () -> Unit) {
             if (focusedSurfaceOptions.isNotEmpty()) {
                 item {
                     SectionTitle(
-                        title = "Focused Blocks",
-                        subtitle = "Target one distracting surface without blocking the whole app."
+                        title = "Surface Blocks",
+                        subtitle = "Block only Reels or Shorts."
                     )
                 }
 
@@ -226,6 +269,34 @@ fun BlacklistScreen(onBack: () -> Unit) {
                                 if (enabled) add(option.surfaceId) else remove(option.surfaceId)
                             }
                             prefs.blockedContentSurfaces = blockedSurfaces
+
+                            if (enabled && option.surfaceId == FocusGuardPrefs.SURFACE_INSTAGRAM_REELS) {
+                                blacklistedSet = blacklistedSet.toMutableSet().apply {
+                                    remove(FocusGuardPrefs.INSTAGRAM_PACKAGE)
+                                    remove(FocusGuardPrefs.INSTAGRAM_LITE_PACKAGE)
+                                }
+                                prefs.blacklistedApps = blacklistedSet
+                            }
+                        }
+                    )
+                }
+            }
+
+            if ("com.google.android.youtube" in installedPackageNames) {
+                item {
+                    StudyYoutubeModeCard(
+                        productiveChannels = productiveChannels,
+                        distractingChannels = distractingChannels,
+                        shortsShieldEnabled = blockedSurfaces.contains(FocusGuardPrefs.SURFACE_YOUTUBE_SHORTS),
+                        wholeAppBlocked = blacklistedSet.contains("com.google.android.youtube"),
+                        isLocked = isLocked,
+                        onUpdateProductive = { updated ->
+                            productiveChannels = updated.toMutableSet()
+                            prefs.youtubeProductiveChannels = productiveChannels
+                        },
+                        onUpdateDistracting = { updated ->
+                            distractingChannels = updated.toMutableSet()
+                            prefs.youtubeDistractingChannels = distractingChannels
                         }
                     )
                 }
@@ -237,7 +308,7 @@ fun BlacklistScreen(onBack: () -> Unit) {
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
-                        Text("Search apps", color = FrictionColors.TextMuted)
+                        Text("Search apps for full block", color = FrictionColors.TextMuted)
                     },
                     leadingIcon = {
                         Icon(
@@ -268,8 +339,8 @@ fun BlacklistScreen(onBack: () -> Unit) {
             if (suggestedApps.isNotEmpty()) {
                 item {
                     SectionTitle(
-                        title = "Quick Picks",
-                        subtitle = "Common distraction apps you may want to lock first."
+                        title = "Full App Quick Picks",
+                        subtitle = "These apps are blocked as soon as they open."
                     )
                 }
 
@@ -293,16 +364,16 @@ fun BlacklistScreen(onBack: () -> Unit) {
 
             item {
                 SectionTitle(
-                    title = if (searchQuery.isBlank()) "All Apps" else "Results",
-                    subtitle = if (searchQuery.isBlank()) {
-                        "Blocked apps stay pinned at the top so you can audit them quickly."
-                    } else {
-                        "Matching apps for \"$searchQuery\"."
-                    }
+                    title = if (searchQuery.isBlank()) "All Full App Blocks" else "Full-Block Results",
+                    subtitle = if (searchQuery.isBlank()) "Pick any app to block." else "Results for \"$searchQuery\"."
                 )
             }
 
-            if (otherApps.isEmpty()) {
+            if (isLoadingApps && installedApps.isEmpty()) {
+                item {
+                    AppsLoadingState()
+                }
+            } else if (otherApps.isEmpty()) {
                 item {
                     EmptySearchState(query = searchQuery)
                 }
@@ -352,20 +423,91 @@ private fun BlacklistOverviewCard(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "$blockedAppCount apps blocked  |  $focusedBlockCount focused blocks active",
+                text = "$blockedAppCount full apps  |  $focusedBlockCount surface blocks",
                 color = FrictionColors.Accent,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = if (isLocked) {
-                    "Focus hours are active. You can add more blockers, but you cannot remove the ones already on."
+                    "Focus is active. You can add blockers, but not remove them."
                 } else {
-                    "Use full app blocks for the worst apps and focused blocks when only one tab needs a wall."
+                    "Use surface blocks for Reels or Shorts. Use full app blocks for everything else."
                 },
                 color = FrictionColors.TextSecondary,
                 fontSize = 13.sp,
                 lineHeight = 18.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun BlockModeGuideCard() {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 18.dp,
+        backgroundColor = FrictionColors.GlassBackground
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            BlockModeRow(
+                title = "Surface-only",
+                subtitle = "Instagram opens, Reels tab is blocked.",
+                accentColor = FrictionColors.Success
+            )
+            Divider(color = FrictionColors.CardBorder)
+            BlockModeRow(
+                title = "Full app",
+                subtitle = "The selected app is blocked on launch.",
+                accentColor = FrictionColors.Accent
+            )
+            Divider(color = FrictionColors.CardBorder)
+            BlockModeRow(
+                title = "Daily limit",
+                subtitle = "Time budgets can plug in here later.",
+                accentColor = FrictionColors.Warning
+            )
+        }
+    }
+}
+
+@Composable
+private fun BlockModeRow(
+    title: String,
+    subtitle: String,
+    accentColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 6.dp, height = 34.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(accentColor)
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                color = FrictionColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                color = FrictionColors.TextSecondary,
+                fontSize = 12.sp,
+                lineHeight = 16.sp
             )
         }
     }
@@ -425,14 +567,18 @@ private fun FocusedSurfaceToggleItem(
                     fontSize = 15.sp
                 )
                 Text(
-                    text = option.subtitle,
+                    text = if (isEnabled) {
+                        "${option.subtitle} Active now."
+                    } else {
+                        option.subtitle
+                    },
                     color = FrictionColors.TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp
                 )
                 if (wholeAppBlocked) {
                     Text(
-                        text = "Whole app is already blacklisted, so this acts as a backup.",
+                        text = option.wholeAppBlockedMessage,
                         color = FrictionColors.Warning,
                         fontSize = 11.sp
                     )
@@ -454,6 +600,217 @@ private fun FocusedSurfaceToggleItem(
                     disabledCheckedTrackColor = FrictionColors.Accent.copy(alpha = 0.3f)
                 )
             )
+        }
+    }
+}
+
+@Composable
+private fun StudyYoutubeModeCard(
+    productiveChannels: Set<String>,
+    distractingChannels: Set<String>,
+    shortsShieldEnabled: Boolean,
+    wholeAppBlocked: Boolean,
+    isLocked: Boolean,
+    onUpdateProductive: (Set<String>) -> Unit,
+    onUpdateDistracting: (Set<String>) -> Unit
+) {
+    var productiveDraft by rememberSaveable { mutableStateOf("") }
+    var distractingDraft by rememberSaveable { mutableStateOf("") }
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 22.dp,
+        backgroundColor = FrictionColors.GlassBackground
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Study YouTube Mode",
+                    color = FrictionColors.TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Block Shorts. Allow selected study channels.",
+                    color = FrictionColors.TextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            }
+
+            if (!shortsShieldEnabled) {
+                Text(
+                    text = "Turn on YouTube Shorts above to activate these channel rules.",
+                    color = FrictionColors.Warning,
+                    fontSize = 12.sp
+                )
+            }
+
+            if (wholeAppBlocked) {
+                Text(
+                    text = "YouTube is fully blocked. Switch to Shorts-only to use channel rules.",
+                    color = FrictionColors.Warning,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            }
+
+            ChannelRuleSection(
+                title = "Productive Channels",
+                subtitle = "Allowed channels for study videos.",
+                channels = productiveChannels,
+                accentColor = FrictionColors.Success,
+                draftValue = productiveDraft,
+                addLabel = "Add productive",
+                isLocked = isLocked,
+                onDraftChange = { productiveDraft = it },
+                onAdd = {
+                    val updated = productiveChannels
+                        .plus(productiveDraft.trim())
+                        .filter { it.isNotBlank() }
+                        .toCollection(linkedSetOf())
+                    onUpdateProductive(updated)
+                    productiveDraft = ""
+                },
+                onRemove = { channel ->
+                    onUpdateProductive(productiveChannels.filterNot { it == channel }.toCollection(linkedSetOf()))
+                }
+            )
+
+            ChannelRuleSection(
+                title = "Distracting Channels",
+                subtitle = "Channels to block even when YouTube is allowed.",
+                channels = distractingChannels,
+                accentColor = FrictionColors.Accent,
+                draftValue = distractingDraft,
+                addLabel = "Add distracting",
+                isLocked = isLocked,
+                onDraftChange = { distractingDraft = it },
+                onAdd = {
+                    val updated = distractingChannels
+                        .plus(distractingDraft.trim())
+                        .filter { it.isNotBlank() }
+                        .toCollection(linkedSetOf())
+                    onUpdateDistracting(updated)
+                    distractingDraft = ""
+                },
+                onRemove = { channel ->
+                    onUpdateDistracting(distractingChannels.filterNot { it == channel }.toCollection(linkedSetOf()))
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelRuleSection(
+    title: String,
+    subtitle: String,
+    channels: Set<String>,
+    accentColor: Color,
+    draftValue: String,
+    addLabel: String,
+    isLocked: Boolean,
+    onDraftChange: (String) -> Unit,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                color = accentColor,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp
+            )
+            Text(
+                text = subtitle,
+                color = FrictionColors.TextSecondary,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+            )
+        }
+
+        if (channels.isEmpty()) {
+            Text(
+                text = "No channels added yet.",
+                color = FrictionColors.TextMuted,
+                fontSize = 12.sp
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                channels.sortedBy { it.lowercase() }.forEach { channel ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(FrictionColors.SurfaceElevated.copy(alpha = 0.65f))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = channel,
+                            color = FrictionColors.TextPrimary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = { onRemove(channel) },
+                            enabled = !isLocked
+                        ) {
+                            Text(
+                                text = "Remove",
+                                color = if (isLocked) FrictionColors.TextMuted else accentColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = draftValue,
+                onValueChange = onDraftChange,
+                modifier = Modifier.weight(1f),
+                enabled = !isLocked,
+                placeholder = {
+                    Text("Channel name or @handle", color = FrictionColors.TextMuted)
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = FrictionColors.TextPrimary,
+                    unfocusedTextColor = FrictionColors.TextPrimary,
+                    focusedBorderColor = accentColor,
+                    unfocusedBorderColor = FrictionColors.CardBorder,
+                    focusedContainerColor = FrictionColors.CardBackground,
+                    unfocusedContainerColor = FrictionColors.CardBackground,
+                    disabledTextColor = FrictionColors.TextMuted,
+                    disabledBorderColor = FrictionColors.CardBorder,
+                    disabledContainerColor = FrictionColors.CardBackground
+                )
+            )
+            Button(
+                onClick = onAdd,
+                enabled = !isLocked && draftValue.isNotBlank(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+            ) {
+                Text(text = addLabel)
+            }
         }
     }
 }
@@ -517,8 +874,12 @@ private fun AppToggleItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = app.packageName,
-                    color = FrictionColors.TextMuted,
+                    text = if (isBlacklisted) {
+                        "Full app block active  |  ${app.packageName}"
+                    } else {
+                        "Full app block  |  ${app.packageName}"
+                    },
+                    color = if (isBlacklisted) highlightColor else FrictionColors.TextMuted,
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -577,6 +938,35 @@ private fun EmptySearchState(query: String) {
 }
 
 @Composable
+private fun AppsLoadingState() {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 18.dp,
+        backgroundColor = FrictionColors.GlassBackground
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Loading installed apps",
+                color = FrictionColors.TextPrimary,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+            Text(
+                text = "Scanning apps in the background so this screen stays responsive.",
+                color = FrictionColors.TextSecondary,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+            )
+        }
+    }
+}
+
+@Composable
 fun PYQLockedCard() {
     var currentQuestion by remember { mutableStateOf(QuestionRepository.getRandomQuestion()) }
     var selectedOption by remember { mutableStateOf<String?>(null) }
@@ -597,28 +987,27 @@ fun PYQLockedCard() {
         return
     }
 
-    val question = currentQuestion!!
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = FrictionColors.CardBackground)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+    currentQuestion?.let { question ->
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = FrictionColors.CardBackground)
         ) {
-            Text(
-                text = "Locked right now",
-                color = FrictionColors.Accent,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
-            )
-            Text(
-                text = "Focus hours are active. Here is a question instead.",
-                color = FrictionColors.TextSecondary,
-                fontSize = 12.sp
-            )
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Locked right now",
+                    color = FrictionColors.Accent,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "Focus hours are active. Here is a question instead.",
+                    color = FrictionColors.TextSecondary,
+                    fontSize = 12.sp
+                )
 
             Divider(color = FrictionColors.CardBorder)
 
@@ -736,4 +1125,51 @@ fun PYQLockedCard() {
             }
         }
     }
+}
+}
+
+private fun loadInstalledApps(context: android.content.Context): List<InstalledAppInfo> {
+    val packageManager = context.packageManager
+
+    val installedApplications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        packageManager.getInstalledApplications(
+            PackageManager.ApplicationInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        packageManager.getInstalledApplications(PackageManager.MATCH_ALL)
+    }
+
+    val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    val launcherPackages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        packageManager.queryIntentActivities(
+            launcherIntent,
+            PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
+    }.mapTo(linkedSetOf()) { it.activityInfo.packageName }
+
+    return installedApplications
+        .asSequence()
+        .filter { app -> app.packageName != context.packageName }
+        .filter { app ->
+            launcherPackages.contains(app.packageName) ||
+                packageManager.getLaunchIntentForPackage(app.packageName) != null
+        }
+        .map { app ->
+            InstalledAppInfo(
+                packageName = app.packageName,
+                appName = packageManager.getApplicationLabel(app).toString(),
+                icon = try {
+                    packageManager.getApplicationIcon(app.packageName)
+                } catch (_: Exception) {
+                    null
+                }
+            )
+        }
+        .distinctBy { it.packageName }
+        .sortedBy { it.appName.lowercase() }
+        .toList()
 }

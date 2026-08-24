@@ -2,32 +2,44 @@
 
 ## Phase 0 - Stability and Performance
 
-- [ ] Fix Stats tab crashes
-- [ ] Fix PYQ freezes
-- [ ] Move heavy DB/repository work off Main thread
-- [ ] Share usage state between Home and Stats
-- [ ] Add usage stats cache
-- [ ] Add PYQ question cache
+- [x] Fix Stats tab crashes
+- [x] Fix PYQ freezes
+- [x] Move heavy DB/repository work off Main thread
+- [x] Share usage state between Home and Stats
+- [x] Add usage stats cache
+- [x] Add PYQ question cache
 - [ ] Use lazy ViewModel creation where possible
-- [ ] Use lifecycle-safe state collection
+- [x] Use lifecycle-safe state collection
+- [x] Remove high-risk null assertions from overlay, PYQ lock card, and stats UI
+- [x] Move installed-app scanning off the Blacklist screen main composition path
+- [x] Apply modern productivity UI foundation polish
 - [ ] Reduce unnecessary recomposition
 - [ ] Convert fatal repository/database errors into safe UI states
 
 ## Phase 1 - Smarter Blocking Core
 
-- [ ] Add protected apps list
+- [x] Add protected apps list
 - [ ] Add app-specific uninstall shield
 - [ ] Add app-specific force stop shield
 - [ ] Add app-specific clear data / clear storage shield
 - [ ] Add app-specific app info shield
-- [ ] Remove or soften generic launcher uninstall blocking
-- [ ] Add reels-only blocking mode
-- [ ] Add shorts-only blocking mode
-- [ ] Improve Instagram Reels detection
-- [ ] Add YouTube Shorts detection
+- [x] Remove or soften generic launcher uninstall blocking
+- [x] Add reels-only blocking mode
+- [x] Add shorts-only blocking mode
+- [x] Improve Instagram Reels detection
+- [x] Add YouTube Shorts detection
 - [ ] Add Facebook Reels / similar surface detection
-- [ ] Add Study YouTube mode
+- [x] Add Study YouTube mode
 - [ ] Support full-app block vs surface-only block vs limit-based access
+
+Current rule: full-app blocking is controlled only by apps toggled on in Distraction Blocks. No app is permanently hardcoded as always blocked.
+Instagram rule: default mode is Reels-only blocking, so Instagram can open unless the user explicitly full-blacklists it.
+PYQ rule: every blocked distraction attempt starts with a PYQ, including normal guard mode and surface blocks like Reels/Shorts.
+PYQ analytics rule: overlay PYQ answers from normal blocks, strict blocks, and surface blocks are saved into PYQ attempt history.
+Recovery rule: after a distraction block, Today shows a smart playful recovery card with Focus/PYQ actions.
+Design rule: use neutral dark surfaces, green for productive actions, amber for recovery/warnings, red only for block/danger states, and tighter card radii.
+Distraction Blocks layout now separates Surface Blocks, Full App Blocks, and the future Daily Limit lane. Limit-based access logic is still pending.
+Exit protection rule: only Focus Guard self-removal/admin-deactivation is blocked. Other app uninstalls and normal file deletes stay allowed.
 
 ## Phase 2 - Studyflow Integration
 
@@ -48,13 +60,14 @@
 - [ ] Add daily time budget per app
 - [ ] Add controlled break mode
 - [ ] Add session-based unlock
-- [ ] Add PYQ-based unlock
+- [x] Add PYQ-based unlock
+- [x] Log overlay PYQ attempts into progress analytics
 - [ ] Add focus-task-based unlock
-- [ ] Add recovery flow after distraction
-- [ ] Add smart nudges
-- [ ] Add streaks
+- [x] Add recovery flow after distraction
+- [x] Add smart nudges
+- [x] Add streaks
 - [ ] Add XP / discipline score
-- [ ] Add saved-time dashboard
+- [x] Add saved-time dashboard
 - [ ] Add weekly focus report
 - [ ] Add social detox dashboard
 - [ ] Add motivational buddy / focus coach
@@ -88,17 +101,17 @@
 ### V1
 
 - [ ] Complete Phase 0
-- [ ] Add protected apps
+- [x] Add protected apps
 - [ ] Add app-specific uninstall shield
-- [ ] Add reels / shorts blocking
+- [x] Add reels / shorts blocking
 - [ ] Add Studyflow timer sync
 - [ ] Add shared analytics basics
 
 ### V2
 
 - [ ] Add app limits
-- [ ] Add Study YouTube mode
-- [ ] Add recovery flow
+- [x] Add Study YouTube mode
+- [x] Add recovery flow
 - [ ] Improve analytics
 - [ ] Add streaks and XP
 - [ ] Add session-based unlock
@@ -113,12 +126,12 @@
 ## Top 10 First Build Targets
 
 - [ ] Stability and crash fixes
-- [ ] Protected apps list
+- [x] Protected apps list
 - [ ] App-specific uninstall shield
-- [ ] Reels / Shorts-only block
-- [ ] Study YouTube mode
+- [x] Reels / Shorts-only block
+- [x] Study YouTube mode
 - [ ] Studyflow timer sync
 - [ ] Distraction event sync into Studyflow
 - [ ] App limits
-- [ ] Recovery flow
-- [ ] Streak + saved-time dashboard
+- [x] Recovery flow
+- [x] Streak + saved-time dashboard

@@ -1,80 +1,70 @@
 package com.focusguard.app.friction
 
 import android.util.Log
-import com.focusguard.app.friction.layers.*
+import com.focusguard.app.friction.layers.CognitiveTaskLayer
+import com.focusguard.app.friction.layers.FailureInjectionLayer
+import com.focusguard.app.friction.layers.ForcedDelayLayer
+import com.focusguard.app.friction.layers.FrictionLayer
+import com.focusguard.app.friction.layers.RandomWaitLayer
 import kotlin.random.Random
 
 /**
- * Builds a randomized sequence of friction layers for each attempt.
+ * Builds a randomized friction sequence for each blocked app attempt.
  *
- * The pipeline is different every time to prevent the user from
- * memorizing and adapting to the pattern.
- *
- * Base structure: Delay → Task → Wait → [FailureInjection] → [Task] → [Wait]
- * Additional layers are inserted based on escalation level.
- * Order is partially shuffled for unpredictability.
+ * The first visible step is always a PYQ task so every distraction attempt
+ * creates at least one productive study action before any delay or denial.
  */
 class FrictionPipeline {
 
-    /**
-     * Build a randomized friction layer sequence based on escalation parameters.
-     */
     fun build(params: EscalationEngine.EscalationParams): List<FrictionLayer> {
         val layers = mutableListOf<FrictionLayer>()
 
-        // Always start with a forced delay (anchoring — set the frustration tone)
-        layers.add(ForcedDelayLayer())
+        // Always start with a PYQ so every attempt creates study value.
+        layers.add(CognitiveTaskLayer())
 
-        // Core layers based on escalation
         when {
             params.escalationLevel <= 0 -> {
-                // Level 0: Delay → Task → Wait
-                layers.add(CognitiveTaskLayer())
-                layers.add(RandomWaitLayer())
+                layers.add(if (Random.nextBoolean()) RandomWaitLayer() else ForcedDelayLayer())
             }
             params.escalationLevel == 1 -> {
-                // Level 1: Delay → Task → Wait → FailureInjection
-                layers.add(CognitiveTaskLayer())
                 layers.add(RandomWaitLayer())
-                layers.add(FailureInjectionLayer())
+                if (Random.nextFloat() < 0.5f) layers.add(FailureInjectionLayer())
+                if (Random.nextFloat() < 0.3f) layers.add(CognitiveTaskLayer())
             }
             params.escalationLevel == 2 -> {
-                // Level 2: Delay → Task → Wait → FailureInjection → Task → Wait
-                layers.add(CognitiveTaskLayer())
                 layers.add(RandomWaitLayer())
                 layers.add(FailureInjectionLayer())
                 layers.add(CognitiveTaskLayer())
-                layers.add(RandomWaitLayer())
+                if (Random.nextFloat() < 0.4f) layers.add(RandomWaitLayer())
             }
             else -> {
-                // Level 3+: Maximum friction
+                layers.add(RandomWaitLayer())
+                layers.add(FailureInjectionLayer())
+                layers.add(ForcedDelayLayer())
                 layers.add(CognitiveTaskLayer())
                 layers.add(RandomWaitLayer())
                 layers.add(FailureInjectionLayer())
-                layers.add(ForcedDelayLayer()) // Second delay!
-                layers.add(CognitiveTaskLayer())
-                layers.add(RandomWaitLayer())
-                layers.add(FailureInjectionLayer()) // Second failure chance!
 
-                // Extra layers for extreme escalation
                 val extraLayers = (params.escalationLevel - 3).coerceAtMost(4)
                 repeat(extraLayers) {
                     layers.add(
-                        if (Random.nextBoolean()) CognitiveTaskLayer()
-                        else RandomWaitLayer()
+                        when (Random.nextInt(3)) {
+                            0 -> CognitiveTaskLayer()
+                            1 -> RandomWaitLayer()
+                            else -> ForcedDelayLayer()
+                        }
                     )
                 }
             }
         }
 
-        // Apply anti-adaptation: shuffle middle layers (keep first delay fixed)
-        if (layers.size > 3) {
+        if (layers.size > 2) {
             val firstLayer = layers.removeAt(0)
             layers.shuffle()
             layers.add(0, firstLayer)
         }
 
-        Log.d(TAG, "Pipeline built: ${layers.size} layers → ${layers.map { it.name }}")
+        Log.d(TAG, "Pipeline built: ${layers.size} layers -> ${layers.map { it.name }}")
         return layers
     }
 

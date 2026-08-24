@@ -1,7 +1,6 @@
 package com.focusguard.app.blocking
 
 import android.content.Context
-import android.provider.Settings
 import android.os.SystemClock
 import android.util.Log
 import com.focusguard.app.antibypass.PermissionMonitor
@@ -27,10 +26,27 @@ class BlockingManager(
 
     @Synchronized
     fun canBlockNow(source: DetectionSource = DetectionSource.ACCESSIBILITY): Boolean {
+        return canBlockNowFor(packageName = null, source = source)
+    }
+
+    @Synchronized
+    fun canBlockPackageNow(
+        packageName: String,
+        source: DetectionSource = DetectionSource.ACCESSIBILITY
+    ): Boolean {
+        return canBlockNowFor(packageName = packageName, source = source)
+    }
+
+    private fun canBlockNowFor(
+        packageName: String?,
+        source: DetectionSource
+    ): Boolean {
         val baseAllowed =
             prefs.hasAcceptedAccessibilityDisclosure &&
+                prefs.isProtectionArmed &&
                 prefs.isServiceEnabled &&
-                prefs.isGuardActiveNow()
+                prefs.isGuardActiveNow() &&
+                permissionMonitor.hasAllRequiredPermissions()
 
         if (!baseAllowed) {
             if (state != BlockingState.FRICTION_ACTIVE && state != BlockingState.BLOCKING) {
@@ -44,10 +60,7 @@ class BlockingManager(
             DetectionSource.USAGE_STATS -> permissionMonitor.isUsageStatsPermitted()
         }
 
-        val canTakeBlockingAction =
-            permissionMonitor.isAccessibilityEnabled() || Settings.canDrawOverlays(appContext)
-
-        if (!canDetect || !canTakeBlockingAction) return false
+        if (!canDetect) return false
 
         if (state == BlockingState.IDLE) {
             state = BlockingState.MONITORING
@@ -56,8 +69,9 @@ class BlockingManager(
     }
 
     fun isBlockedPackage(packageName: String): Boolean {
-        return packageName != appContext.packageName &&
-            packageName !in prefs.whitelistedApps &&
+        if (packageName == appContext.packageName) return false
+
+        return packageName !in prefs.whitelistedApps &&
             packageName in prefs.blacklistedApps
     }
 
@@ -66,7 +80,7 @@ class BlockingManager(
         packageName: String,
         source: DetectionSource
     ): Boolean {
-        if (!canBlockNow(source)) return false
+        if (!canBlockPackageNow(packageName, source)) return false
         if (!isBlockedPackage(packageName)) return false
 
         val now = SystemClock.elapsedRealtime()

@@ -28,6 +28,10 @@ class SettingsRepository(
 
     suspend fun setStrictModeEndTimeMillis(value: Long) {
         legacyPrefs.blockEndTime = value
+        if (value <= 0L) {
+            legacyPrefs.strictModeStartElapsed = 0L
+            legacyPrefs.strictModeDurationMs = 0L
+        }
         settingsDataStore.setStrictModeEndTimeMillis(value)
     }
 
@@ -46,15 +50,31 @@ class SettingsRepository(
         settingsDataStore.setAccessibilityDisclosureAccepted(value)
     }
 
-    suspend fun enableStrictMode(durationMinutes: Int, exitProtectionEnabled: Boolean) {
-        val endTimeMillis = System.currentTimeMillis() + durationMinutes * 60_000L
-        setStrictModeDurationMinutes(durationMinutes)
+    suspend fun enableStrictMode(
+        durationMinutes: Int,
+        exitProtectionEnabled: Boolean,
+        keepRequestedDuration: Boolean = false
+    ) {
+        val effectiveDurationMinutes = if (exitProtectionEnabled && !keepRequestedDuration) {
+            STRICT_HARDLOCK_MINUTES
+        } else {
+            durationMinutes
+        }
+        val durationMs = effectiveDurationMinutes.toLong() * 60_000L
+        val endTimeMillis = System.currentTimeMillis() + durationMs
+        setStrictModeDurationMinutes(effectiveDurationMinutes)
         setStrictModeExitProtectionEnabled(exitProtectionEnabled)
+        legacyPrefs.strictModeStartElapsed = android.os.SystemClock.elapsedRealtime()
+        legacyPrefs.strictModeDurationMs = durationMs
         setStrictModeEndTimeMillis(endTimeMillis)
     }
 
     suspend fun disableStrictMode() {
         setStrictModeEndTimeMillis(0L)
         setStrictModeExitProtectionEnabled(false)
+    }
+
+    companion object {
+        const val STRICT_HARDLOCK_MINUTES = 30 * 24 * 60
     }
 }

@@ -1,5 +1,12 @@
 # FocusGuard
 
+## Canonical build source
+
+Build only from `app/`. The `frictionguard-perfect-decompiled/` directory is an
+ignored reverse-engineering reference for the legacy APK; it is never compiled
+or merged as smali. The generated APK will therefore contain the root app UI
+and the blocking behaviour ported into its Kotlin sources.
+
 > *"Make bad habits so difficult, slow, and frustrating that you voluntarily give up."*
 
 A personal Android app that uses **extreme, multi-layered, adaptive friction** to discourage opening Instagram and other distracting apps.

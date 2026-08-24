@@ -29,6 +29,7 @@ class OverlayManager(private val context: Context) {
     // Pre-inflated overlay — ready to show instantly
     private var overlayView: View? = null
     private var isShowing = false
+    private var globalExitAction: (() -> Unit)? = null
 
     // Layout params for full-screen blocking overlay
     private val overlayParams: WindowManager.LayoutParams by lazy {
@@ -84,7 +85,7 @@ class OverlayManager(private val context: Context) {
         return try {
             val view = overlayView ?: run {
                 preInitialize()
-                overlayView!!
+                overlayView ?: return false
             }
             if (view.isAttachedToWindow) {
                 isShowing = true
@@ -167,10 +168,18 @@ class OverlayManager(private val context: Context) {
     fun getSubmitButton(): Button? =
         overlayView?.findViewById(R.id.btn_submit)
 
+    fun getExitButton(): Button? =
+        overlayView?.findViewById(R.id.btn_exit_overlay)
+
     fun getAttemptInfo(): TextView? =
         overlayView?.findViewById(R.id.text_attempt_info)
 
     fun isOverlayShowing(): Boolean = isShowing
+
+    fun setGlobalExitAction(action: (() -> Unit)?) {
+        globalExitAction = action
+        getExitButton()?.setOnClickListener { globalExitAction?.invoke() }
+    }
 
     /**
      * Destroy overlay completely (service shutdown).
@@ -213,6 +222,8 @@ class OverlayManager(private val context: Context) {
         getOptionsContainer()?.visibility = View.GONE
         listOf("A", "B", "C", "D").forEach { opt ->
             getOptionButton(opt)?.apply {
+                text = opt
+                visibility = View.VISIBLE
                 isEnabled = true
                 setBackgroundColor(0xFF212130.toInt()) // Reset color
             }
@@ -222,6 +233,12 @@ class OverlayManager(private val context: Context) {
             visibility = View.GONE
         }
         getSubmitButton()?.visibility = View.GONE
+        getExitButton()?.apply {
+            visibility = View.GONE
+            text = "Home"
+            isEnabled = true
+            setOnClickListener { globalExitAction?.invoke() }
+        }
     }
 
     companion object {

@@ -378,7 +378,7 @@ fun ScheduleScreen(onBack: () -> Unit) {
                 colors = CardDefaults.cardColors(containerColor = FrictionColors.WarningSoft)
             ) {
                 Text(
-                    "Focus schedules block distracting apps during selected hours. Settings and app-removal screens are interrupted only if you separately enable Exit Delay Protection in Strict Mode.",
+                    "Schedules block selected apps during these hours.",
                     color = FrictionColors.Warning,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,

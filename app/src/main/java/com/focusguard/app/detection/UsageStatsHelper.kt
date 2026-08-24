@@ -55,11 +55,6 @@ class UsageStatsHelper(private val context: Context) {
     }
 
     private fun checkForegroundApp() {
-        if (!FocusGuardApp.instance.blockingManager.canBlockNow(DetectionSource.USAGE_STATS)) {
-            lastForegroundPackage = null
-            return
-        }
-
         val currentTime = System.currentTimeMillis()
         val stats = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_BEST,
@@ -76,19 +71,26 @@ class UsageStatsHelper(private val context: Context) {
             ?.packageName ?: return
 
         // Skip if same as last check
+        val blockingManager = FocusGuardApp.instance.blockingManager
         if (foregroundApp == lastForegroundPackage) return
-        lastForegroundPackage = foregroundApp
 
         // Skip our own app
         if (foregroundApp == "com.focusguard.app") return
 
         val prefs = FocusGuardApp.instance.prefs
 
-        // Check whitelist first
+        if (!blockingManager.canBlockPackageNow(foregroundApp, DetectionSource.USAGE_STATS)) {
+            lastForegroundPackage = null
+            return
+        }
+
+        lastForegroundPackage = foregroundApp
+
+        // Check whitelist first.
         if (prefs.whitelistedApps.contains(foregroundApp)) return
 
-        // Check blacklist
-        if (prefs.blacklistedApps.contains(foregroundApp)) {
+        // Check blacklist.
+        if (blockingManager.isBlockedPackage(foregroundApp)) {
             // Only trigger if AccessibilityService hasn't already caught it
             run {
                 Log.w(TAG, "🚫 FALLBACK DETECTION: $foregroundApp detected via UsageStats")
@@ -146,7 +148,7 @@ class UsageStatsHelper(private val context: Context) {
                         packageName = stat.packageName,
                         appName = appName,
                         usageTimeMs = stat.totalTimeInForeground,
-                        isBlacklisted = prefs.blacklistedApps.contains(stat.packageName)
+                        isBlacklisted = isDistractingPackage(stat.packageName, prefs.blacklistedApps)
                     )
                 }
                 ?.sortedByDescending { it.usageTimeMs }
@@ -194,7 +196,7 @@ class UsageStatsHelper(private val context: Context) {
                             packageName = stat.packageName,
                             appName = appName,
                             usageTimeMs = stat.totalTimeInForeground,
-                            isBlacklisted = prefs.blacklistedApps.contains(stat.packageName)
+                            isBlacklisted = isDistractingPackage(stat.packageName, prefs.blacklistedApps)
                         )
                     }
                     ?.sortedByDescending { it.usageTimeMs }
@@ -215,6 +217,10 @@ class UsageStatsHelper(private val context: Context) {
      */
     fun getBlacklistedUsage(): List<com.focusguard.app.domain.AppUsageData> {
         return getDailyUsageStats().filter { it.isBlacklisted }
+    }
+
+    private fun isDistractingPackage(packageName: String, blacklistedApps: Set<String>): Boolean {
+        return packageName in blacklistedApps
     }
 
     companion object {

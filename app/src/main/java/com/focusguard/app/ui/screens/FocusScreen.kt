@@ -17,6 +17,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,10 @@ import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,6 +68,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -87,6 +94,9 @@ fun FocusScreen(
     val state by viewModel.state.collectAsState()
     val haptics = LocalHapticFeedback.current
     var visible by remember { mutableStateOf(false) }
+    var useAccountabilityLock by remember { mutableStateOf(true) }
+    var showLockSetup by remember { mutableStateOf(false) }
+    var showUnlock by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         visible = true
@@ -151,15 +161,32 @@ fun FocusScreen(
                 }
 
                 item {
+                    AccountabilityLockCard(
+                        enabled = useAccountabilityLock,
+                        sessionActive = state.isActive,
+                        lockActive = state.isAccountabilityLockActive,
+                        onEnabledChange = { useAccountabilityLock = it }
+                    )
+                }
+
+                item {
                     FocusActionButton(
                         isActive = state.isActive,
                         onStart = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.startFocus()
+                            if (useAccountabilityLock) {
+                                showLockSetup = true
+                            } else {
+                                viewModel.startFocus()
+                            }
                         },
                         onStop = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.endSession()
+                            if (state.isAccountabilityLockActive) {
+                                showUnlock = true
+                            } else {
+                                viewModel.endSession()
+                            }
                         }
                     )
                 }
@@ -178,7 +205,135 @@ fun FocusScreen(
                 item { Spacer(modifier = Modifier.height(18.dp)) }
             }
         }
+
+        if (showLockSetup) {
+            AccountabilityPinDialog(
+                title = "Create accountability lock",
+                body = "Use a 6–12 digit PIN that you give to a trusted person. Focus Guard cannot recover it. The session stays protected until its timer ends or that PIN is entered.",
+                confirmLabel = "Start locked focus",
+                requireConfirmation = true,
+                onDismiss = { showLockSetup = false },
+                onConfirm = { pin ->
+                    showLockSetup = false
+                    viewModel.startFocus(pin)
+                }
+            )
+        }
+
+        if (showUnlock) {
+            AccountabilityPinDialog(
+                title = "Accountability PIN required",
+                body = "Ask the person holding the PIN before ending this focus session.",
+                confirmLabel = "End session",
+                onDismiss = { showUnlock = false },
+                onConfirm = { pin ->
+                    showUnlock = false
+                    viewModel.endSession(pin)
+                }
+            )
+        }
     }
+}
+
+@Composable
+private fun AccountabilityLockCard(
+    enabled: Boolean,
+    sessionActive: Boolean,
+    lockActive: Boolean,
+    onEnabledChange: (Boolean) -> Unit
+) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 20.dp,
+        backgroundColor = if (lockActive) FrictionColors.WarningSoft else FrictionColors.GlassBackground
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = if (lockActive) "Accountability lock active" else "Accountability lock",
+                color = FrictionColors.TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (lockActive) {
+                    "This session can only be ended with its trusted PIN."
+                } else {
+                    "Require a trusted person's PIN to end this session early."
+                },
+                color = FrictionColors.TextSecondary,
+                fontSize = 12.sp,
+                lineHeight = 17.sp
+            )
+            if (!sessionActive) {
+                TextButton(onClick = { onEnabledChange(!enabled) }) {
+                    Text(if (enabled) "Lock enabled for next session" else "Enable for next session")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountabilityPinDialog(
+    title: String,
+    body: String,
+    confirmLabel: String,
+    requireConfirmation: Boolean = false,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    val validPin = pin.matches(Regex("\\d{6,12}"))
+    val canConfirm = validPin && (!requireConfirmation || pin == confirmation)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(body)
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { pin = it.filter(Char::isDigit).take(12) },
+                    label = { Text("6–12 digit PIN") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
+                )
+                if (requireConfirmation) {
+                    OutlinedTextField(
+                        value = confirmation,
+                        onValueChange = { confirmation = it.filter(Char::isDigit).take(12) },
+                        label = { Text("Confirm PIN") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true
+                    )
+                }
+                if ((pin.isNotEmpty() && !validPin) ||
+                    (requireConfirmation && confirmation.isNotEmpty() && confirmation != pin)
+                ) {
+                    Text(
+                        text = if (!validPin) "Use 6–12 digits." else "PINs do not match.",
+                        color = FrictionColors.Error,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(pin) }, enabled = canConfirm) {
+                Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable

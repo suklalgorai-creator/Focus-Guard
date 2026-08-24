@@ -19,7 +19,7 @@ class TrackingManager(
     private val appPackage = context.packageName
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessionManager = ForegroundSessionManager(
-        isDistractingPackage = { packageName -> packageName in prefs.blacklistedApps },
+        isDistractingPackage = { packageName -> isDistractingPackage(packageName) },
         onSessionClosed = { session -> usageRepository.recordSession(session) }
     )
     private val sessionMutex = Mutex()
@@ -50,7 +50,7 @@ class TrackingManager(
 
     @Synchronized
     fun onBlockedApp(packageName: String) {
-        if (packageName !in prefs.blacklistedApps) return
+        if (!isDistractingPackage(packageName)) return
 
         val now = SystemClock.elapsedRealtime()
         if (packageName == lastBlockedPackage && now - lastBlockedAtElapsedMs < BLOCK_EVENT_COOLDOWN_MS) {
@@ -79,6 +79,10 @@ class TrackingManager(
         return prefs.hasAcceptedAccessibilityDisclosure &&
             prefs.isServiceEnabled &&
             (prefs.isGuardActiveNow() || prefs.isUsageTrackingEnabled)
+    }
+
+    private fun isDistractingPackage(packageName: String): Boolean {
+        return packageName in prefs.blacklistedApps
     }
 
     companion object {

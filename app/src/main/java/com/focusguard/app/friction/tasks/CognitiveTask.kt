@@ -16,7 +16,10 @@ data class TaskChallenge(
     val answer: String,
     val taskType: TaskType,
     val hint: String = "",
-    val explanation: String? = null  // Solution shown on wrong answer
+    val explanation: String? = null, // Solution shown on wrong answer
+    val questionId: Int? = null,
+    val subject: String? = null,
+    val startedAtMs: Long = System.currentTimeMillis()
 ) {
     fun checkAnswer(userAnswer: String): Boolean {
         return when (taskType) {

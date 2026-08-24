@@ -26,6 +26,7 @@ import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.presentation.analytics.AnalyticsViewModel
 import com.focusguard.app.presentation.usage.UsageStatsViewModel
 import com.focusguard.app.ui.components.GlassCard
+import com.focusguard.app.ui.components.StableLinearProgress
 import com.focusguard.app.ui.theme.FrictionColors
 
 /**
@@ -129,7 +130,7 @@ fun UsageStatsScreen(
                             color = FrictionColors.TextPrimary,
                             fontSize = 40.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-1).sp
+                            letterSpacing = 0.sp
                         )
                         if (blacklistedTotalMs > 0) {
                             Spacer(modifier = Modifier.height(10.dp))
@@ -211,7 +212,7 @@ fun UsageStatsScreen(
                 0 -> {
                     if (usageState.isLoading) {
                         item {
-                            LinearProgressIndicator(
+                            StableLinearProgress(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = FrictionColors.Accent,
                                 trackColor = FrictionColors.SurfaceElevated
@@ -315,7 +316,7 @@ private fun MiniStatCard(
 
 @Composable
 private fun UsageBarItem(app: AppUsageData, maxMs: Long, isBlacklisted: Boolean) {
-    val fraction = (app.usageTimeMs.toFloat() / maxMs.toFloat()).coerceIn(0.03f, 1f)
+    val fraction = usageProgressFraction(app.usageTimeMs, maxMs)
     val barColor = if (isBlacklisted) FrictionColors.Accent else FrictionColors.Success
 
     GlassCard(
@@ -367,13 +368,17 @@ private fun UsageBarItem(app: AppUsageData, maxMs: Long, isBlacklisted: Boolean)
 
 @Composable
 private fun WeekDayBar(dayKey: String, totalMs: Long, blacklistedMs: Long, maxMs: Long) {
-    val fraction = (totalMs.toFloat() / maxMs.toFloat()).coerceIn(0.03f, 1f)
-    val blacklistedFraction = if (totalMs > 0) (blacklistedMs.toFloat() / totalMs.toFloat()) else 0f
+    val fraction = usageProgressFraction(totalMs, maxMs)
+    val blacklistedFraction = usageProgressFraction(
+        valueMs = blacklistedMs,
+        maxMs = totalMs,
+        minFraction = 0f
+    )
 
     val dayName = try {
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
         val dayFormat = java.text.SimpleDateFormat("EEE, MMM d", java.util.Locale.US)
-        dayFormat.format(dateFormat.parse(dayKey)!!)
+        dateFormat.parse(dayKey)?.let(dayFormat::format) ?: dayKey
     } catch (e: Exception) { dayKey }
 
     GlassCard(
@@ -419,7 +424,7 @@ private fun WeekDayBar(dayKey: String, totalMs: Long, blacklistedMs: Long, maxMs
                 if (blacklistedMs > 0) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(fraction * blacklistedFraction)
+                            .fillMaxWidth((fraction * blacklistedFraction).coerceIn(0f, 1f))
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(3.dp))
                             .background(FrictionColors.Accent)
@@ -447,4 +452,15 @@ private fun formatTime(ms: Long): String {
         minutes > 0 -> "${minutes}m"
         else -> "< 1m"
     }
+}
+
+private fun usageProgressFraction(
+    valueMs: Long,
+    maxMs: Long,
+    minFraction: Float = 0.03f
+): Float {
+    if (valueMs <= 0L || maxMs <= 0L) return 0f
+    return (valueMs.toDouble() / maxMs.toDouble())
+        .toFloat()
+        .coerceIn(minFraction, 1f)
 }

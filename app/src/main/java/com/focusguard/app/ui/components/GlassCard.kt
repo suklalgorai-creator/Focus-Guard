@@ -25,7 +25,7 @@ import com.focusguard.app.ui.theme.FrictionColors
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
+    cornerRadius: Dp = 16.dp,
     isActive: Boolean = false,
     backgroundColor: Color = FrictionColors.CardBackground,
     onClick: (() -> Unit)? = null,
@@ -41,7 +41,7 @@ fun GlassCard(
     )
     val bg = if (isActive) FrictionColors.AccentMuted else backgroundColor
     val borderColor = if (isActive) FrictionColors.Accent.copy(alpha = 0.36f) else FrictionColors.GlassBorder
-    val elevation = if (FrictionColors.useDarkPalette) 16.dp else 10.dp
+    val elevation = if (FrictionColors.useDarkPalette) 10.dp else 8.dp
     val shadowColor = if (FrictionColors.useDarkPalette) {
         FrictionColors.Accent.copy(alpha = if (isActive) 0.16f else 0.08f)
     } else {
@@ -50,9 +50,9 @@ fun GlassCard(
     val cardBrush = Brush.linearGradient(
         colors = if (FrictionColors.useDarkPalette) {
             listOf(
-                Color.White.copy(alpha = 0.075f),
+                Color.White.copy(alpha = 0.045f),
                 bg,
-                FrictionColors.Surface.copy(alpha = 0.82f)
+                FrictionColors.Surface.copy(alpha = 0.90f)
             )
         } else {
             listOf(

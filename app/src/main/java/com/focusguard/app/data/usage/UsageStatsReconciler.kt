@@ -97,9 +97,13 @@ class UsageStatsReconciler(
                 startTime = startTime,
                 endTime = endTime,
                 durationMs = duration,
-                isDistracting = packageName in prefs.blacklistedApps
+                isDistracting = isDistractingPackage(packageName)
             )
         )
+    }
+
+    private fun isDistractingPackage(packageName: String): Boolean {
+        return packageName in prefs.blacklistedApps
     }
 
     @Suppress("DEPRECATION")

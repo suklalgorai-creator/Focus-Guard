@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.persistence.FocusGuardPrefs
 
 /**
@@ -30,6 +31,9 @@ class WatchdogReceiver : BroadcastReceiver() {
 
         if (GuardForegroundService.instance == null) {
             Log.w(TAG, "⚠ Service is dead! Restarting...")
+            runCatching {
+                FocusGuardApp.instance.antiBypassManager.recordServiceRestart("watchdog_service_dead")
+            }
             val serviceIntent = Intent(context, GuardForegroundService::class.java)
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

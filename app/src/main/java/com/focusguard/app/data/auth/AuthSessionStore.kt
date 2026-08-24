@@ -2,6 +2,7 @@ package com.focusguard.app.data.auth
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.focusguard.app.domain.auth.AuthSession
@@ -12,17 +13,22 @@ class AuthSessionStore(context: Context) {
     private val appContext = context.applicationContext
 
     private val prefs: SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(appContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        runCatching {
+            val masterKey = MasterKey.Builder(appContext)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
 
-        EncryptedSharedPreferences.create(
-            appContext,
-            STORE_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+            EncryptedSharedPreferences.create(
+                appContext,
+                STORE_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }.getOrElse { exception ->
+            Log.e(TAG, "Encrypted auth session store unavailable; falling back to standard SharedPreferences", exception)
+            appContext.getSharedPreferences("${STORE_NAME}_fallback", Context.MODE_PRIVATE)
+        }
     }
 
     fun loadSession(): AuthSession? {
@@ -75,6 +81,7 @@ class AuthSessionStore(context: Context) {
     }
 
     companion object {
+        private const val TAG = "AuthSessionStore"
         private const val STORE_NAME = "focus_guard_auth_session"
         private const val KEY_ACCESS_TOKEN = "access_token"
         private const val KEY_REFRESH_TOKEN = "refresh_token"

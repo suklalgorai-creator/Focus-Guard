@@ -4,6 +4,14 @@ keystore/
 *.keystore
 .gradle/
 .gradle-user-home/
+.gradle-build-home/
+.gradle-home/
+.android-home/
+.android-local/
+.jdk/
+apk-audit/
+apktool-framework/
+frictionguard-perfect-decompiled/
 build/
 app/build/
 app/release/
@@ -17,3 +25,7 @@ app/release/
 hs_err_pid*
 replay_pid*
 frictionguard.zip
+tools/
+.agents/
+.gemini/
+*.idsig

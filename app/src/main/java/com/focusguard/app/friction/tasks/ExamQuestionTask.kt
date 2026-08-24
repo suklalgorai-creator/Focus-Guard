@@ -28,7 +28,9 @@ class ExamQuestionTask(override val difficulty: Int) : CognitiveTask {
             answer = question.answer,
             taskType = TaskType.EXAM_QUESTION,
             hint = "Type A, B, C, or D",
-            explanation = question.explanation
+            explanation = question.explanation,
+            questionId = question.id,
+            subject = question.subject
         )
     }
 

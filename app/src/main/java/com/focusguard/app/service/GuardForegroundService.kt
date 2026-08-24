@@ -40,14 +40,20 @@ class GuardForegroundService : Service() {
         super.onCreate()
         Log.d(TAG, "GuardForegroundService created")
 
-        if (!FocusGuardApp.instance.prefs.hasAcceptedAccessibilityDisclosure) {
-            Log.d(TAG, "Disclosure not accepted; stopping guard service")
+        if (!canRunGuard()) {
+            Log.d(TAG, "Protection setup incomplete; stopping guard service")
             stopSelf()
             return
         }
 
         foregroundAppDetector = ForegroundAppDetector(this)
-        fallbackOverlayManager = OverlayManager(this).also { it.preInitialize() }
+        fallbackOverlayManager = OverlayManager(this).also { manager ->
+            manager.preInitialize()
+            manager.setGlobalExitAction {
+                manager.hide()
+                FocusGuardApp.instance.blockingManager.finishBlocking()
+            }
+        }
         permissionMonitor = PermissionMonitor(this)
 
         // Start as foreground service immediately
@@ -88,8 +94,8 @@ class GuardForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand — ensuring foreground")
 
-        if (!FocusGuardApp.instance.prefs.hasAcceptedAccessibilityDisclosure) {
-            Log.d(TAG, "Disclosure not accepted; ignoring service start")
+        if (!canRunGuard()) {
+            Log.d(TAG, "Protection setup incomplete; ignoring service start")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -119,7 +125,7 @@ class GuardForegroundService : Service() {
             fallbackOverlayManager.destroy()
         }
 
-        if (FocusGuardApp.instance.prefs.hasAcceptedAccessibilityDisclosure &&
+        if (canRunGuard() &&
             FocusGuardApp.instance.prefs.isGuardActiveNow()) {
             val restartIntent = Intent(this, GuardForegroundService::class.java)
             try {
@@ -174,6 +180,13 @@ class GuardForegroundService : Service() {
             .build()
     }
 
+    private fun canRunGuard(): Boolean {
+        val prefs = FocusGuardApp.instance.prefs
+        return prefs.hasAcceptedAccessibilityDisclosure &&
+            prefs.isProtectionArmed &&
+            prefs.isServiceEnabled
+    }
+
     private fun blockWithServiceFallback(packageName: String) {
         val blockingManager = FocusGuardApp.instance.blockingManager
         if (!blockingManager.tryStartBlocking(packageName, DetectionSource.USAGE_STATS)) return
@@ -192,14 +205,13 @@ class GuardForegroundService : Service() {
         fallbackBlockJob = serviceScope.launch(Dispatchers.Main) {
             fallbackOverlayManager.resetUI()
             fallbackOverlayManager.getPrimaryMessage()?.apply {
-                text = "Blocked by Focus Guard"
+                text = "Blocked"
                 setTextColor(0xFFFF4D6D.toInt())
                 textSize = 24f
             }
             fallbackOverlayManager.getSecondaryMessage()?.text =
-                "Accessibility is unavailable, so Focus Guard is using fallback blocking.\n\n" +
-                    "Re-enable Accessibility for the full PYQ challenge flow."
-            fallbackOverlayManager.getAttemptInfo()?.text = "Fallback block active"
+                "Accessibility is off. Re-enable it for instant blocking."
+            fallbackOverlayManager.getAttemptInfo()?.text = "Fallback mode"
 
             delay(FALLBACK_BLOCK_MS)
             fallbackOverlayManager.hide()
@@ -233,7 +245,7 @@ class GuardForegroundService : Service() {
 
         val notification = NotificationCompat.Builder(this, FocusGuardApp.CHANNEL_ALERTS)
             .setContentTitle("$appLabel detected")
-            .setContentText("Focus Guard needs your attention to keep this distraction blocked.")
+            .setContentText("Open Focus Guard to restore blocking.")
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)

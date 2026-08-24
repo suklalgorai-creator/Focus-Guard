@@ -41,70 +41,64 @@ class OverlayMessageProvider(
 
         private val overlayBank = mapOf(
             OverlayMessageType.QUICK_CHALLENGE to listOf(
-                "Bas 1 question. Itna toh kar sakte ho.",
-                "30 sec. Ek answer. Deal?",
-                "Ek PYQ solve karo... fir jo chahe karo.",
-                "Sirf ek attempt. Phir distraction allowed.",
-                "Abhi ek question... ya seedha scroll?"
+                "One question first.",
+                "30 seconds. One answer.",
+                "Solve one PYQ, then continue.",
+                "Start with one attempt.",
+                "One quick check before access."
             ),
             OverlayMessageType.REALITY_CHECK to listOf(
-                "Scroll karne se rank nahi aayega.",
-                "Tum yaha padhne aaye the... ya bhatakne?",
-                "Ye habit tumhe kaha le ja rahi hai?",
-                "Distraction easy hai... result nahi.",
-                "Sach me ye karna zaroori hai abhi?"
+                "Focus mode is active.",
+                "Return to the plan.",
+                "This app is blocked right now.",
+                "Stay with the session.",
+                "Pause before opening this."
             ),
             OverlayMessageType.PERSONAL_PUSH to listOf(
-                "$SUBJECT_PLACEHOLDER weak hai... aur tum yaha?",
-                "Aaj ka target complete hua kya?",
-                "Kal jo plan kiya tha... wo ho gaya?",
-                "Ye time tumhara strongest hona chahiye.",
-                "Abhi skip kiya... toh baad me regret."
+                "$SUBJECT_PLACEHOLDER needs one review.",
+                "Check today's target first.",
+                "Continue the plan you set.",
+                "This is study time.",
+                "One focused step now."
             ),
             OverlayMessageType.LIGHT_TEASE to listOf(
-                "Avoid kar rahe ho... ya try karoge?",
-                "Distraction strong hai... tum usse strong ho?",
-                "Dar lag raha hai question se?",
-                "Ya toh solve karo... ya accept karo ki avoid kar rahe ho.",
-                "Sach bolo... effort se bach rahe ho?"
+                "Try the question.",
+                "Small step first.",
+                "One answer is enough.",
+                "Keep it simple.",
+                "Continue the focus check."
             ),
             OverlayMessageType.MISTAKE to listOf(
-                "Same mistake repeat ho rahi hai... abhi fix karo.",
-                "Ye topic clear nahi hai... aur tum skip kar rahe ho?",
-                "Galti wahi ho rahi hai... solution bhi wahi hai.",
-                "Abhi nahi sudhara... toh exam me repeat hoga.",
-                "Ye weak area ignore mat karo."
+                "Review the repeated mistake.",
+                "This topic needs one more pass.",
+                "Fix the pattern now.",
+                "Slow down and answer carefully.",
+                "Do not skip this weak area."
             ),
             OverlayMessageType.COMEBACK to listOf(
-                "Flow break ho gaya... wapas aa jao.",
-                "Momentum lose mat hone do.",
-                "Bas ek question... fir flow aa jayega.",
-                "Restart karna tough nahi hai... bas start karo.",
-                "Abhi turn around ho sakta hai."
+                "Resume with one question.",
+                "Rebuild the flow.",
+                "One PYQ can restart momentum.",
+                "Start simple.",
+                "Come back to the session."
             ),
             OverlayMessageType.ULTRA_SHORT to listOf(
-                "1 question. Now.",
-                "Face it.",
-                "Avoid mat karo.",
-                "Do it.",
-                "Abhi."
+                "One question.",
+                "Focus.",
+                "Try once.",
+                "Do it now.",
+                "Stay here."
             )
         )
 
         private val exitAttemptBank = listOf(
-            "Nice try 😏",
-            "Escape attempt detected.",
-            "So... we're quitting now?",
-            "Itna jaldi haar maan li?",
-            "Distraction choose kar rahe ho... consciously?",
-            "Ye decision tum future wale tumhe explain kar paoge?",
-            "Abhi quit karna easy hai... baad me regret harder hoga.",
-            "Kal jo plan banaya tha... wo yaad hai?",
-            "$SUBJECT_PLACEHOLDER weak hai... aur tum app hata rahe ho?",
-            "Ye exit nahi... reset hona chahiye.",
-            "Itna bhi tough nahi tha... phir bhi?",
-            "Question se darr lag gaya kya?",
-            "Avoid karna easy lag raha hai?"
+            "Exit protection is active.",
+            "Focus mode is still running.",
+            "Return to the study session.",
+            "This app remains protected.",
+            "One more calm step.",
+            "$SUBJECT_PLACEHOLDER can wait.",
+            "Close settings and continue."
         )
     }
 }

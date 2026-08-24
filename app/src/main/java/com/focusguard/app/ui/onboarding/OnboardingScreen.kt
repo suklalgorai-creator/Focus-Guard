@@ -232,8 +232,8 @@ private fun WelcomeExamStep(
 ) {
     OnboardingCard(
         icon = Icons.Outlined.School,
-        title = "Distraction se pehle PYQ.",
-        body = "Choose your exam. Baaki Focus Guard adapt karega."
+        title = "Choose exam",
+        body = "Questions and reminders adapt to this."
     ) {
         examOptions.forEach { option ->
             SelectableRow(
@@ -255,8 +255,8 @@ private fun TargetDateStep(
 ) {
     OnboardingCard(
         icon = Icons.Outlined.CalendarMonth,
-        title = "Target date set karo.",
-        body = "Countdown clear hoga toh focus bhi clear rahega."
+        title = "Target date",
+        body = "Used for countdown and study reminders."
     ) {
         OutlinedButton(
             onClick = onPickDate,
@@ -271,7 +271,7 @@ private fun TargetDateStep(
         if (dateError) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Future date choose karo.",
+                text = "Choose a future date.",
                 color = FrictionColors.Accent,
                 fontSize = 12.sp
             )
@@ -288,8 +288,8 @@ private fun SubjectPreferenceStep(
 ) {
     OnboardingCard(
         icon = Icons.Outlined.School,
-        title = "Subjects pick karo.",
-        body = "Optional hai. Isse questions aur nudges better honge."
+        title = "Subjects",
+        body = "Optional. Helps pick better questions."
     ) {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -310,19 +310,19 @@ private fun SubjectPreferenceStep(
 private fun PermissionIntroStep() {
     OnboardingCard(
         icon = Icons.Outlined.Layers,
-        title = "Permissions simple rakhenge.",
-        body = "Overlay distraction rokne ke liye hai. Personal data read ya upload nahi hota."
+        title = "Permissions",
+        body = "Accessibility blocks apps. Overlay shows challenges."
     ) {
         PermissionPoint(
             icon = Icons.Outlined.Layers,
             title = "Overlay",
-            body = "Blocked app khulte hi focus prompt dikhega."
+            body = "Shows the block screen."
         )
         Spacer(modifier = Modifier.height(12.dp))
         PermissionPoint(
             icon = Icons.Outlined.Accessibility,
             title = "Accessibility",
-            body = "App sirf distracting app/screen detect karne ke liye use hota hai."
+            body = "Detects blocked apps."
         )
     }
 }

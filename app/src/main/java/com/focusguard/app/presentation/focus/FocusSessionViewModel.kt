@@ -34,16 +34,16 @@ class FocusSessionViewModel(
         }
     }
 
-    fun startFocus() {
+    fun startFocus(accountabilityPin: String? = null) {
         viewModelScope.launch {
-            _state.value = repository.start(_state.value.mode)
+            _state.value = repository.start(_state.value.mode, accountabilityPin)
             startTicker()
         }
     }
 
-    fun endSession() {
+    fun endSession(accountabilityPin: String? = null) {
         viewModelScope.launch {
-            _state.value = repository.stop(_state.value.mode)
+            _state.value = repository.stop(_state.value.mode, accountabilityPin)
             startTicker()
         }
     }
