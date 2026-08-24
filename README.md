@@ -9,7 +9,7 @@ and the blocking behaviour ported into its Kotlin sources.
 
 > *"Make bad habits so difficult, slow, and frustrating that you voluntarily give up."*
 
-A personal Android app that uses **extreme, multi-layered, adaptive friction** to discourage opening Instagram and other distracting apps.
+A hardcore Android productivity app that uses extreme, multi-layered friction to break bad habits. It detects distracting apps instantly and forces users through cognitive tasks, random delays, and fake failures—ultimately granting access only 25% of the time.
 
 ## Features
 
