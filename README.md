@@ -1,4 +1,6 @@
-# FocusGuard
+# FocusGuard 🚀
+
+[![Android CI](https://github.com/suklalgorai-creator/Focus-Guard/actions/workflows/android.yml/badge.svg)](https://github.com/suklalgorai-creator/Focus-Guard/actions/workflows/android.yml)
 
 ## Canonical build source
 

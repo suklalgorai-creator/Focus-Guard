@@ -38,8 +38,16 @@ class FocusNotificationHelper(
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId(type), notification)
-        return true
+
+        if (ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+        ) {
+            NotificationManagerCompat.from(context).notify(notificationId(type), notification)
+            return true
+        }
+        return false
     }
 
     private fun createPyqPendingIntent(type: NotificationType): PendingIntent {
