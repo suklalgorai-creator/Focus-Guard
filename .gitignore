@@ -26,3 +26,7 @@ replay_pid*
 
 .gemini/
 *.idsig
+
+# Locally downloaded JDKs
+.jdk-new/
+*.zip

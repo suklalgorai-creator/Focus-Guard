@@ -28,7 +28,7 @@ class FocusSessionRepository(
         val now = clock()
         val useAccountabilityLock = !accountabilityPin.isNullOrBlank()
         if (useAccountabilityLock && !prefs.startAccountabilityLock(
-                pin = accountabilityPin,
+                pin = accountabilityPin!!,
                 durationMs = mode.durationMinutes * 60_000L
             )
         ) {
