@@ -1133,7 +1133,7 @@ private fun loadInstalledApps(context: android.content.Context): List<InstalledA
 
     val installedApplications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         packageManager.getInstalledApplications(
-            PackageManager.ApplicationInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+            PackageManager.ApplicationInfoFlags.of(PackageManager.GET_META_DATA.toLong())
         )
     } else {
         @Suppress("DEPRECATION")
@@ -1144,7 +1144,7 @@ private fun loadInstalledApps(context: android.content.Context): List<InstalledA
     val launcherPackages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         packageManager.queryIntentActivities(
             launcherIntent,
-            PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+            PackageManager.ResolveInfoFlags.of(0L)
         )
     } else {
         @Suppress("DEPRECATION")
