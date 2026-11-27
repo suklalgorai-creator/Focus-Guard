@@ -550,7 +550,7 @@ fun ReelCountSettingsCard(app: FocusGuardApp) {
                             label = { Text("Custom limit") },
                             singleLine = true,
                             isError = customLimitError != null,
-                            supportingText = customLimitError?.let { msg -> { Text(msg) } },
+                            supportingText = customLimitError?.let { msg -> @Composable { Text(msg) } },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
                         )
