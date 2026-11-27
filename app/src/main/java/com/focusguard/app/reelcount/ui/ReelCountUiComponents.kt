@@ -20,7 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -428,7 +428,7 @@ fun ReelCountSettingsCard(app: FocusGuardApp) {
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.WarningAmber,
+                            imageVector = Icons.Rounded.Warning,
                             contentDescription = null,
                             tint = FrictionColors.Warning,
                             modifier = Modifier.size(18.dp)

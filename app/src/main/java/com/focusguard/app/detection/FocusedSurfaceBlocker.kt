@@ -9,6 +9,7 @@ import com.focusguard.app.friction.tasks.OverlayPyqAttemptLogger
 import com.focusguard.app.integration.studyflow.StudyFlowOverlayRenderer
 import com.focusguard.app.overlay.OverlayManager
 import com.focusguard.app.persistence.AttemptEntity
+import com.focusguard.app.persistence.FocusGuardPrefs
 import kotlin.random.Random
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
