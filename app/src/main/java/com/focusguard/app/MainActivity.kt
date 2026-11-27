@@ -441,9 +441,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         val prefs = FocusGuardApp.instance.prefs
+        prefs.reconcileDeadlinesAfterReboot()
+        PermissionMonitor(this).checkAllPermissions()
         if (prefs.hasAcceptedAccessibilityDisclosure &&
             prefs.isProtectionArmed &&
-            prefs.isServiceEnabled
+            prefs.isServiceEnabled &&
+            !prefs.isEnforcementPausedForMissingPermission
         ) {
             startGuardService()
         }
@@ -606,7 +609,7 @@ private fun ProtectionSetupScreen(onArmProtection: () -> Unit) {
         }
     }
 
-    val allReady = accessibilityReady && overlayReady && usageReady
+    val canArm = accessibilityReady
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -636,22 +639,24 @@ private fun ProtectionSetupScreen(onArmProtection: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Focus Guard remains off until all three permissions are enabled. This prevents an active-looking session without a visible block screen.",
+                    text = "Accessibility is required for core blocking. Display over other apps enables PYQ challenges, and Usage access enables backup detection and analytics.",
                     color = FrictionColors.TextSecondary,
                     fontSize = 14.sp,
                     lineHeight = 20.sp
                 )
                 SetupPermissionButton(
-                    label = "Accessibility",
+                    label = "Accessibility (Required)",
                     ready = accessibilityReady,
+                    required = true,
                     onClick = {
                         FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     }
                 )
                 SetupPermissionButton(
-                    label = "Display over other apps",
+                    label = "Display over other apps (PYQ overlay)",
                     ready = overlayReady,
+                    required = false,
                     onClick = {
                         FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
                         context.startActivity(
@@ -663,8 +668,9 @@ private fun ProtectionSetupScreen(onArmProtection: () -> Unit) {
                     }
                 )
                 SetupPermissionButton(
-                    label = "Usage access",
+                    label = "Usage access (Analytics & backup)",
                     ready = usageReady,
+                    required = false,
                     onClick = {
                         FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
                         context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
@@ -672,14 +678,14 @@ private fun ProtectionSetupScreen(onArmProtection: () -> Unit) {
                 )
                 Button(
                     onClick = onArmProtection,
-                    enabled = allReady,
+                    enabled = canArm,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = FrictionColors.Accent,
                         disabledContainerColor = FrictionColors.SurfaceElevated
                     )
                 ) {
-                    Text(if (allReady) "Arm Focus Guard" else "Complete all permissions")
+                    Text(if (canArm) "Arm Focus Guard" else "Enable Accessibility to continue")
                 }
             }
         }
@@ -687,10 +693,20 @@ private fun ProtectionSetupScreen(onArmProtection: () -> Unit) {
 }
 
 @Composable
-private fun SetupPermissionButton(label: String, ready: Boolean, onClick: () -> Unit) {
+private fun SetupPermissionButton(
+    label: String,
+    ready: Boolean,
+    required: Boolean,
+    onClick: () -> Unit
+) {
+    val statusText = when {
+        ready -> "Ready"
+        required -> "Required"
+        else -> "Optional"
+    }
     OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "$label · ${if (ready) "Ready" else "Required"}",
+            text = "$label · $statusText",
             color = if (ready) FrictionColors.Success else FrictionColors.TextPrimary
         )
     }

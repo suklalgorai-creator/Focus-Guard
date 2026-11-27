@@ -41,7 +41,15 @@ class SettingsBlocker(
             add("focusguard")
             add("friction guard")
             runCatching {
-                val appInfo = context.packageManager.getApplicationInfo(context.packageName, 0)
+                val appInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    context.packageManager.getApplicationInfo(
+                        context.packageName,
+                        android.content.pm.PackageManager.ApplicationInfoFlags.of(0)
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getApplicationInfo(context.packageName, 0)
+                }
                 context.packageManager.getApplicationLabel(appInfo).toString()
             }.getOrNull()
                 ?.lowercase(Locale.US)

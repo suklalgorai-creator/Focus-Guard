@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
 import android.content.Context
 import android.os.Build
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
@@ -15,55 +16,70 @@ import com.focusguard.app.FocusGuardApp
 /**
  * Monitors critical permissions and alerts when they're disabled.
  *
- * Checks:
- * 1. Accessibility Service enabled
- * 2. Overlay (SYSTEM_ALERT_WINDOW) permission
- * 3. Usage Stats access
+ * Uses [PermissionHealthEvaluator] as the single source of truth:
+ * - Accessibility Service: required for core blocking
+ * - Overlay & Usage Access: optional (degraded mode without them)
  *
- * If any permission is missing:
- * - Shows a persistent high-priority notification
- * - Increases next friction session difficulty
+ * Never wipes Accountability Lock or armed configuration when a permission is revoked.
  */
 class PermissionMonitor(private val context: Context) {
 
+    fun getPermissionSnapshot(): PermissionSnapshot {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val batteryIgnored = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+        val notificationsOk = NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+        return PermissionSnapshot(
+            accessibilityEnabled = isAccessibilityEnabled(),
+            overlayEnabled = isOverlayPermitted(),
+            usageStatsEnabled = isUsageStatsPermitted(),
+            notificationsEnabled = notificationsOk,
+            batteryOptimizationIgnored = batteryIgnored
+        )
+    }
+
+    fun getHealthSummary(): PermissionHealthSummary {
+        return PermissionHealthEvaluator.evaluate(getPermissionSnapshot())
+    }
+
     /**
-     * Check all required permissions. Called periodically by foreground service.
+     * Check permissions periodically. Preserves Accountability Lock and armed state
+     * when permissions are revoked, and automatically resumes when restored.
      */
     fun checkAllPermissions() {
-        val accessibilityOk = isAccessibilityEnabled()
-        val overlayOk = isOverlayPermitted()
-        val usageStatsOk = isUsageStatsPermitted()
-
-        val allOk = accessibilityOk && overlayOk && usageStatsOk
-
+        val summary = getHealthSummary()
+        val snapshot = summary.snapshot
         val prefs = FocusGuardApp.instance.prefs
 
-        if (!allOk && prefs.isProtectionArmed) {
-            Log.w(TAG, "Permission check FAILED: " +
-                    "accessibility=$accessibilityOk, overlay=$overlayOk, usageStats=$usageStatsOk")
+        if (!summary.canEnforceCoreBlocking && prefs.isProtectionArmed) {
+            Log.w(
+                TAG,
+                "Core permission missing: accessibility=${snapshot.accessibilityEnabled}, " +
+                    "overlay=${snapshot.overlayEnabled}, usageStats=${snapshot.usageStatsEnabled}"
+            )
 
             if (!prefs.lastPermissionCheckFailed) {
-                // First failure — apply penalty and notify
                 prefs.lastPermissionCheckFailed = true
                 FocusGuardApp.instance.antiBypassManager.recordPermissionLoss(
-                    accessibilityOk = accessibilityOk,
-                    overlayOk = overlayOk,
-                    usageStatsOk = usageStatsOk
+                    accessibilityOk = snapshot.accessibilityEnabled,
+                    overlayOk = snapshot.overlayEnabled,
+                    usageStatsOk = snapshot.usageStatsEnabled
                 )
-                showPermissionAlert(accessibilityOk, overlayOk, usageStatsOk)
+                showPermissionAlert(summary)
             }
-            // Do not leave a session marked active when no visible block can
-            // be delivered. The setup gate will require all access again.
             prefs.pauseProtectionForMissingPermission()
-        } else {
-            prefs.lastPermissionCheckFailed = false
+        } else if (summary.canEnforceCoreBlocking) {
+            if (prefs.lastPermissionCheckFailed || prefs.isEnforcementPausedForMissingPermission) {
+                prefs.lastPermissionCheckFailed = false
+                prefs.restoreEnforcementAfterPermissionRecovery()
+                NotificationManagerCompat.from(context).cancel(ALERT_NOTIFICATION_ID)
+                Log.i(TAG, "Core permissions restored; enforcement resumed")
+            }
         }
     }
 
     fun hasAllRequiredPermissions(): Boolean {
-        return isAccessibilityEnabled() &&
-            isOverlayPermitted() &&
-            isUsageStatsPermitted()
+        return isAccessibilityEnabled()
     }
 
     fun isAccessibilityEnabled(): Boolean {
@@ -103,24 +119,17 @@ class PermissionMonitor(private val context: Context) {
         }
     }
 
-    private fun showPermissionAlert(
-        accessibilityOk: Boolean,
-        overlayOk: Boolean,
-        usageStatsOk: Boolean
-    ) {
-        val missing = mutableListOf<String>()
-        if (!accessibilityOk) missing.add("Accessibility Service")
-        if (!overlayOk) missing.add("Display Over Other Apps")
-        if (!usageStatsOk) missing.add("Usage Data Access")
+    private fun showPermissionAlert(summary: PermissionHealthSummary) {
+        val missing = (summary.missingRequired + summary.missingOptional).map { it.label }
 
         val notification = NotificationCompat.Builder(context, FocusGuardApp.CHANNEL_ALERTS)
-            .setContentTitle("Focus Guard protection disabled")
-            .setContentText("Missing: ${missing.joinToString(", ")}")
+            .setContentTitle("Focus Guard enforcement paused")
+            .setContentText(summary.affectedFeaturesSummary)
             .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "The following permissions have been disabled:\n" +
-                missing.joinToString("\n") { "• $it" } +
-                "\n\nNext focus challenge difficulty has been increased by +1 level.\n" +
-                "Re-enable permissions to restore normal operation."
+                "${summary.affectedFeaturesSummary}\n\n" +
+                    "Missing:\n" +
+                    missing.joinToString("\n") { "• $it" } +
+                    "\n\nYour lock settings are preserved. Re-enable Accessibility in Focus Guard to resume."
             ))
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -129,6 +138,14 @@ class PermissionMonitor(private val context: Context) {
             .build()
 
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.e(TAG, "POST_NOTIFICATIONS permission not granted, cannot show alert")
+                return
+            }
             NotificationManagerCompat.from(context).notify(ALERT_NOTIFICATION_ID, notification)
         } catch (e: SecurityException) {
             Log.e(TAG, "Cannot show notification: ${e.message}")

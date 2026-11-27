@@ -44,7 +44,7 @@ class FrictionOrchestrator(
     private var sessionJob: Job? = null
     private val sessionScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private var currentAttemptEntity: AttemptEntity? = null
+
     private var sessionStartTime: Long = 0
     private var isSessionActive = false
     private var exitRevealJob: Job? = null
@@ -192,7 +192,15 @@ class FrictionOrchestrator(
                         sessionScope.launch {
                             delay(2500)
                             // Force them out of the app to truly block them
-                            com.focusguard.app.detection.AppDetectorService.instance?.forceHome()
+                            AppDetectorService.instance?.forceHome()
+                                ?: run {
+                                    // Fallback: use Intent to go home if AccessibilityService is dead
+                                    val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                                        addCategory(android.content.Intent.CATEGORY_HOME)
+                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(homeIntent)
+                                }
                             deferredResult.complete(true)
                         }
                     } else {
@@ -705,7 +713,15 @@ class FrictionOrchestrator(
 
     private fun blockedAppLabel(packageName: String): String {
         return runCatching {
-            val info = context.packageManager.getApplicationInfo(packageName, 0)
+            val info = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getApplicationInfo(
+                    packageName,
+                    android.content.pm.PackageManager.ApplicationInfoFlags.of(0)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getApplicationInfo(packageName, 0)
+            }
             context.packageManager.getApplicationLabel(info).toString()
         }.getOrDefault(packageName)
     }

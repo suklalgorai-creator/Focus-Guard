@@ -1,6 +1,7 @@
 package com.focusguard.app.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -42,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -56,13 +58,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.focusguard.app.FocusGuardApp
+import com.focusguard.app.antibypass.EnforcementLevel
+import com.focusguard.app.antibypass.MissingPermissionType
+import com.focusguard.app.antibypass.PermissionHealthSummary
 import com.focusguard.app.antibypass.PermissionMonitor
 import com.focusguard.app.domain.profile.UserProfile
 import com.focusguard.app.domain.settings.FocusSettings
@@ -101,16 +109,35 @@ fun TodayHubScreen(
     val prefs = app.prefs
     val usageState by usageStatsViewModel.state.collectAsStateWithLifecycle()
     val permissionMonitor = remember { PermissionMonitor(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var accessibilityEnabled by remember { mutableStateOf(false) }
-    var overlayEnabled by remember { mutableStateOf(false) }
+    var healthSummary by remember { mutableStateOf(permissionMonitor.getHealthSummary()) }
+    var accessibilityEnabled by remember { mutableStateOf(healthSummary.snapshot.accessibilityEnabled) }
+    var overlayEnabled by remember { mutableStateOf(healthSummary.snapshot.overlayEnabled) }
     var streakDays by remember { mutableIntStateOf(0) }
     var recoverySnapshot by remember { mutableStateOf(prefs.getDistractionRecoverySnapshot()) }
 
+    fun refreshPermissionHealth() {
+        permissionMonitor.checkAllPermissions()
+        val next = permissionMonitor.getHealthSummary()
+        healthSummary = next
+        accessibilityEnabled = next.snapshot.accessibilityEnabled
+        overlayEnabled = next.snapshot.overlayEnabled
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshPermissionHealth()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
-            accessibilityEnabled = permissionMonitor.isAccessibilityEnabled()
-            overlayEnabled = permissionMonitor.isOverlayPermitted()
+            refreshPermissionHealth()
             recoverySnapshot = prefs.getDistractionRecoverySnapshot()
             streakDays = withContext(Dispatchers.IO) {
                 runCatching { app.analyticsRepository.getStreak() }.getOrDefault(streakDays)
@@ -169,6 +196,21 @@ fun TodayHubScreen(
                 subtitle = "Protection, study, and progress in one place.",
                 onOpenMenu = onOpenMenu
             )
+        }
+
+        if (healthSummary.enforcementLevel != EnforcementLevel.ACTIVE &&
+            healthSummary.primaryMissing != null
+        ) {
+            item {
+                PermissionRecoveryCard(
+                    summary = healthSummary,
+                    lockPreserved = prefs.isAccountabilityLockActive,
+                    onFixPermission = { missing ->
+                        prefs.allowPermissionSetupWindow()
+                        openSettingsForPermission(context, missing)
+                    }
+                )
+            }
         }
 
         recoverySnapshot?.let { recovery ->
@@ -369,6 +411,80 @@ fun TodayHubScreen(
             )
         }
     }
+}
+
+@Composable
+private fun PermissionRecoveryCard(
+    summary: PermissionHealthSummary,
+    lockPreserved: Boolean,
+    onFixPermission: (MissingPermissionType) -> Unit
+) {
+    val missing = summary.primaryMissing ?: return
+    val isUnavailable = summary.enforcementLevel == EnforcementLevel.UNAVAILABLE
+    val accentColor = if (isUnavailable) FrictionColors.Error else FrictionColors.Warning
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 16.dp,
+        backgroundColor = if (isUnavailable) FrictionColors.ErrorSoft else FrictionColors.WarningSoft
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = if (isUnavailable) {
+                    "${missing.label} required"
+                } else {
+                    "Degraded mode: ${missing.label} off"
+                },
+                color = accentColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = buildString {
+                    append(summary.affectedFeaturesSummary)
+                    if (lockPreserved && isUnavailable) {
+                        append(" Accountability Lock remains preserved.")
+                    }
+                },
+                color = FrictionColors.TextPrimary,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+            )
+            SecondaryButton(
+                text = "Open ${missing.label} settings",
+                leadingIcon = Icons.Rounded.AdminPanelSettings,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onFixPermission(missing) }
+            )
+        }
+    }
+}
+
+private fun openSettingsForPermission(
+    context: android.content.Context,
+    missing: MissingPermissionType
+) {
+    val intent = when (missing) {
+        MissingPermissionType.ACCESSIBILITY -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        MissingPermissionType.OVERLAY -> Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:${context.packageName}")
+        )
+        MissingPermissionType.USAGE_STATS -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        MissingPermissionType.NOTIFICATIONS -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            }
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+        }
+    }
+    context.startActivity(intent)
 }
 
 @Composable

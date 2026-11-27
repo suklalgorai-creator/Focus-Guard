@@ -1,11 +1,13 @@
 package com.focusguard.app.service
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import com.focusguard.app.antibypass.PermissionMonitor
 import com.focusguard.app.persistence.FocusGuardPrefs
 
 class ServiceHealthWorker(
@@ -19,8 +21,14 @@ class ServiceHealthWorker(
             return Result.success()
         }
 
+        val pm = PermissionMonitor(context)
+        if (!pm.isAccessibilityEnabled() && !pm.isUsageStatsPermitted()) {
+            prefs.pauseProtectionForMissingPermission()
+            return Result.success()
+        }
+
         if (GuardForegroundService.instance == null) {
-            Log.w(TAG, "WorkManager watchdog: service dead, restarting")
+            Log.w(TAG, "WorkManager watchdog: service dead, attempting restart")
             try {
                 val intent = Intent(context, GuardForegroundService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -29,7 +37,13 @@ class ServiceHealthWorker(
                     context.startService(intent)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "WorkManager watchdog restart failed: ${e.message}", e)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    e is ForegroundServiceStartNotAllowedException
+                ) {
+                    Log.w(TAG, "Background FGS restart restricted on Android 12+: ${e.message}")
+                } else {
+                    Log.e(TAG, "WorkManager watchdog restart failed: ${e.message}", e)
+                }
             }
         }
 

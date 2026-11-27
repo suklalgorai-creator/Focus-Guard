@@ -57,27 +57,31 @@ class GuardForegroundService : Service() {
         permissionMonitor = PermissionMonitor(this)
 
         // Start as foreground service immediately
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (!ensureForeground()) {
+            stopSelf()
+            return
+        }
 
         // Schedule watchdog
         if (FocusGuardApp.instance.prefs.isGuardActiveNow()) {
             WatchdogReceiver.scheduleWatchdog(this)
         }
 
-        // Start fallback detection polling — actually trigger blocking if accessibility missed it
-        foregroundAppDetector.startUsageStatsPolling(serviceScope) { packageName ->
-            Log.w(TAG, "Fallback detection triggered for: $packageName")
-            serviceScope.launch(Dispatchers.Main) {
-                val detector = AppDetectorService.instance
-                if (detector != null) {
-                    // AccessibilityService is alive but missed this — force-home as safe fallback
-                    detector.onUsageStatsBlockedAppDetected(packageName)
-                } else {
-                    // AccessibilityService is dead — we can't show overlay without it
-                    // but we CAN send a high-priority notification
-                    blockWithServiceFallback(packageName)
+        // Start fallback detection polling only if Usage Access is granted
+        if (permissionMonitor.isUsageStatsPermitted()) {
+            foregroundAppDetector.startUsageStatsPolling(serviceScope) { packageName ->
+                Log.w(TAG, "Fallback detection triggered for: $packageName")
+                serviceScope.launch(Dispatchers.Main) {
+                    val detector = AppDetectorService.instance
+                    if (detector != null) {
+                        detector.onUsageStatsBlockedAppDetected(packageName)
+                    } else {
+                        blockWithServiceFallback(packageName)
+                    }
                 }
             }
+        } else {
+            Log.d(TAG, "UsageStats permission not granted; running in Accessibility-only mode")
         }
 
         // Periodic permission check
@@ -101,7 +105,10 @@ class GuardForegroundService : Service() {
         }
 
         // Re-show notification in case it was cleared
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (!ensureForeground()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         // Re-schedule watchdog only while protection can actually be active.
         if (FocusGuardApp.instance.prefs.isGuardActiveNow()) {
@@ -125,18 +132,11 @@ class GuardForegroundService : Service() {
             fallbackOverlayManager.destroy()
         }
 
+        // Use WatchdogReceiver for safe restart instead of directly calling
+        // startForegroundService(), which throws on Android 12+ from background.
         if (canRunGuard() &&
             FocusGuardApp.instance.prefs.isGuardActiveNow()) {
-            val restartIntent = Intent(this, GuardForegroundService::class.java)
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(restartIntent)
-                } else {
-                    startService(restartIntent)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Unable to restart foreground service: ${e.message}", e)
-            }
+            WatchdogReceiver.scheduleWatchdog(this)
         }
 
         super.onDestroy()
@@ -180,11 +180,25 @@ class GuardForegroundService : Service() {
             .build()
     }
 
+    private fun ensureForeground(): Boolean {
+        return try {
+            startForeground(NOTIFICATION_ID, buildNotification())
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Unable to promote GuardForegroundService to foreground: ${e.message}", e)
+            false
+        }
+    }
+
     private fun canRunGuard(): Boolean {
         val prefs = FocusGuardApp.instance.prefs
-        return prefs.hasAcceptedAccessibilityDisclosure &&
+        val prefsOk = prefs.hasAcceptedAccessibilityDisclosure &&
             prefs.isProtectionArmed &&
             prefs.isServiceEnabled
+        if (!prefsOk) return false
+
+        val pm = PermissionMonitor(this)
+        return pm.isAccessibilityEnabled() || pm.isUsageStatsPermitted()
     }
 
     private fun blockWithServiceFallback(packageName: String) {
@@ -226,9 +240,16 @@ class GuardForegroundService : Service() {
      */
     private fun showFallbackInterruption(packageName: String): Boolean {
         val appLabel = try {
-            packageManager.getApplicationLabel(
+            val appInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getApplicationInfo(
+                    packageName,
+                    android.content.pm.PackageManager.ApplicationInfoFlags.of(0)
+                )
+            } else {
+                @Suppress("DEPRECATION")
                 packageManager.getApplicationInfo(packageName, 0)
-            ).toString()
+            }
+            packageManager.getApplicationLabel(appInfo).toString()
         } catch (e: Exception) { packageName }
 
         val intent = Intent(this, FallbackBlockActivity::class.java).apply {
@@ -257,6 +278,14 @@ class GuardForegroundService : Service() {
             .build()
 
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.e(TAG, "POST_NOTIFICATIONS permission not granted, cannot show fallback alert")
+                return false
+            }
             NotificationManagerCompat.from(this).notify(FALLBACK_ALERT_ID, notification)
             Log.w(TAG, "Fallback interruption notification posted for $packageName")
             return true

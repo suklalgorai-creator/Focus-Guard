@@ -1,6 +1,7 @@
 package com.focusguard.app.service
 
 import android.app.AlarmManager
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -43,7 +44,13 @@ class WatchdogReceiver : BroadcastReceiver() {
                 }
                 Log.d(TAG, "Service restarted by watchdog")
             } catch (e: Exception) {
-                Log.e(TAG, "Watchdog failed to restart service: ${e.message}", e)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    e is ForegroundServiceStartNotAllowedException
+                ) {
+                    Log.w(TAG, "Watchdog cannot start FGS from background on Android 12+: ${e.message}")
+                } else {
+                    Log.e(TAG, "Watchdog failed to restart service: ${e.message}", e)
+                }
             }
         } else {
             Log.d(TAG, "Service is alive ✓")
@@ -73,21 +80,32 @@ class WatchdogReceiver : BroadcastReceiver() {
 
             val triggerAt = SystemClock.elapsedRealtime() + WATCHDOG_INTERVAL_MS
 
+            val canUseExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                alarmManager.canScheduleExactAlarms()
+
             try {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    triggerAt,
-                    pendingIntent
-                )
-                Log.d(TAG, "Watchdog scheduled for ${WATCHDOG_INTERVAL_MS / 1000}s from now")
+                if (canUseExact) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        triggerAt,
+                        pendingIntent
+                    )
+                    Log.d(TAG, "Watchdog scheduled (exact) for ${WATCHDOG_INTERVAL_MS / 1000}s from now")
+                } else {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        triggerAt,
+                        pendingIntent
+                    )
+                    Log.d(TAG, "Watchdog scheduled (inexact) for ${WATCHDOG_INTERVAL_MS / 1000}s from now")
+                }
             } catch (e: SecurityException) {
-                // Fallback to inexact alarm if exact alarm permission not granted
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.ELAPSED_REALTIME_WAKEUP,
                     triggerAt,
                     pendingIntent
                 )
-                Log.d(TAG, "Watchdog scheduled (inexact) for ${WATCHDOG_INTERVAL_MS / 1000}s")
+                Log.d(TAG, "Watchdog scheduled (inexact fallback) for ${WATCHDOG_INTERVAL_MS / 1000}s")
             }
         }
     }

@@ -37,7 +37,8 @@ class AppDetectorService : AccessibilityService() {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED or
                 AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
-                AccessibilityEvent.TYPE_VIEW_CLICKED
+                AccessibilityEvent.TYPE_VIEW_CLICKED or
+                AccessibilityEvent.TYPE_VIEW_SELECTED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 50
             flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
@@ -73,7 +74,8 @@ class AppDetectorService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> handleWindowChange(packageName, safeEvent)
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> handleContentChange(packageName, safeEvent)
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_SELECTED -> handleContentChange(packageName, safeEvent)
         }
     }
 
@@ -118,6 +120,7 @@ class AppDetectorService : AccessibilityService() {
     private fun handleWindowChange(packageName: String, event: AccessibilityEvent) {
         val prefs = FocusGuardApp.instance.prefs
         FocusGuardApp.instance.trackingManager.onForegroundAppChanged(packageName)
+        surfaceDetector.onForegroundPackageChanged(packageName)
 
         val blockingManager = FocusGuardApp.instance.blockingManager
 
@@ -153,6 +156,16 @@ class AppDetectorService : AccessibilityService() {
 
         if (blockingManager.shouldEndCurrentBlockFor(packageName)) {
             onBlockedAppClosed()
+        }
+
+        if (blockingManager.currentBlockedPackage == null &&
+            blockingManager.canBlockNow(DetectionSource.ACCESSIBILITY)
+        ) {
+            val surfaceMatch = surfaceDetector.detect(event, rootInActiveWindow)
+            if (surfaceMatch != null) {
+                Log.w(TAG, "Focused surface blocked on window transition: ${surfaceMatch.blockKey}")
+                focusedSurfaceBlocker.onSurfaceDetected(surfaceMatch)
+            }
         }
     }
 
@@ -194,6 +207,10 @@ class AppDetectorService : AccessibilityService() {
     fun forceBack() {
         Log.d(TAG, "Force back")
         performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
+    fun isSurfaceStillVisible(match: ContentSurfaceMatch): Boolean {
+        return surfaceDetector.isSurfaceStillVisible(match, rootInActiveWindow)
     }
 
     override fun onInterrupt() {

@@ -1,6 +1,7 @@
 package com.focusguard.app.detection
 
 import android.os.SystemClock
+import android.util.Log
 import android.view.View
 import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.friction.tasks.ExamQuestionTask
@@ -51,8 +52,40 @@ class FocusedSurfaceBlocker(
         hideJob?.cancel()
         hideJob = scope.launch {
             showSurfacePyq(match)
+            ensureExitedFromSurface(match)
             overlayManager.hide()
         }
+    }
+
+    /**
+     * Verifies that the initial Back action exited the blocked surface before hiding the overlay.
+     * Performs at most [MAX_BACK_RETRIES] bounded Back retries, then falls back to Home if needed.
+     */
+    private suspend fun ensureExitedFromSurface(match: ContentSurfaceMatch) {
+        val service = AppDetectorService.instance
+        if (service == null) {
+            Log.w(TAG, "Exit verification skipped: exit_unverified_service_null")
+            return
+        }
+
+        if (!service.isSurfaceStillVisible(match)) {
+            Log.d(TAG, "Exit result for ${match.blockKey}: exited_via_back")
+            return
+        }
+
+        repeat(MAX_BACK_RETRIES) { attempt ->
+            Log.w(TAG, "Surface still visible after Back; retry ${attempt + 1}/$MAX_BACK_RETRIES")
+            service.forceBack()
+            delay(EXIT_RETRY_DELAY_MS)
+            if (!service.isSurfaceStillVisible(match)) {
+                Log.d(TAG, "Exit result for ${match.blockKey}: exited_via_retry_back")
+                return
+            }
+        }
+
+        Log.w(TAG, "Exit result for ${match.blockKey}: fallback_force_home")
+        service.forceHome()
+        delay(EXIT_RETRY_DELAY_MS)
     }
 
     private suspend fun showSurfacePyq(match: ContentSurfaceMatch) {
@@ -152,7 +185,10 @@ class FocusedSurfaceBlocker(
     }
 
     companion object {
+        private const val TAG = "FocusedSurfaceBlocker"
         private const val BLOCK_COOLDOWN_MS = 1200L
         private const val SURFACE_PYQ_TIMEOUT_MS = 30_000L
+        private const val MAX_BACK_RETRIES = 2
+        private const val EXIT_RETRY_DELAY_MS = 250L
     }
 }

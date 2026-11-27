@@ -177,12 +177,21 @@ class FocusGuardPrefs(context: Context) {
         set(value) = prefs.edit().putLong(KEY_BLOCK_END_TIME, value).apply()
 
     fun isStrictBlockActive(): Boolean {
-        val startElapsed = strictModeStartElapsed
-        if (startElapsed > 0L) {
-            val elapsed = android.os.SystemClock.elapsedRealtime() - startElapsed
-            if (elapsed >= 0L && elapsed < strictModeDurationMs) return true
+        if (blockEndTime <= 0L && strictModeStartElapsed <= 0L) return false
+        val state = readStrictModeDeadlineState()
+        val evaluation = LockDeadlineTracker.evaluate(
+            state = state,
+            nowWallMs = System.currentTimeMillis(),
+            nowElapsedMs = SystemClock.elapsedRealtime()
+        )
+        if (evaluation.isActive) {
+            if (evaluation.rebootDetected || state.wallDeadlineMs <= 0L) {
+                writeStrictModeDeadlineState(evaluation.updatedState)
+                blockEndTime = evaluation.updatedState.wallDeadlineMs
+            }
+            return true
         }
-        return System.currentTimeMillis() < blockEndTime
+        return false
     }
 
     val isStrictModeEnabled: Boolean
@@ -211,13 +220,27 @@ class FocusGuardPrefs(context: Context) {
     // ── Accountability Lock ──
 
     val isAccountabilityLockActive: Boolean
-        get() {
-            val untilElapsed = prefs.getLong(KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED, 0L)
-            if (untilElapsed <= 0L) return false
-            val active = SystemClock.elapsedRealtime() < untilElapsed
-            if (!active) clearAccountabilityLock()
-            return active
+        get() = evaluateAccountabilityLock().isActive
+
+    fun getAccountabilityLockRemainingMs(): Long = evaluateAccountabilityLock().remainingMs
+
+    private fun evaluateAccountabilityLock(): LockEvaluation {
+        val state = readAccountabilityDeadlineState()
+        if (state.originalDurationMs <= 0L && state.wallDeadlineMs <= 0L) {
+            return LockEvaluation(isActive = false, remainingMs = 0L, updatedState = LockDeadlineState())
         }
+        val evaluation = LockDeadlineTracker.evaluate(
+            state = state,
+            nowWallMs = System.currentTimeMillis(),
+            nowElapsedMs = SystemClock.elapsedRealtime()
+        )
+        if (!evaluation.isActive) {
+            clearAccountabilityLock()
+        } else if (evaluation.rebootDetected) {
+            writeAccountabilityDeadlineState(evaluation.updatedState)
+        }
+        return evaluation
+    }
 
     /**
      * Stores a salted SHA-256 verifier only. The PIN is intentionally not
@@ -228,13 +251,20 @@ class FocusGuardPrefs(context: Context) {
 
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val verifier = hashPin(salt, pin)
+        val deadlineState = LockDeadlineTracker.create(
+            durationMs = durationMs,
+            nowWallMs = System.currentTimeMillis(),
+            nowElapsedMs = SystemClock.elapsedRealtime()
+        )
         prefs.edit()
             .putString(KEY_ACCOUNTABILITY_PIN_SALT, Base64.getEncoder().encodeToString(salt))
             .putString(KEY_ACCOUNTABILITY_PIN_HASH, Base64.getEncoder().encodeToString(verifier))
-            .putLong(
-                KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED,
-                SystemClock.elapsedRealtime() + durationMs
-            )
+            .putLong(KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED, deadlineState.elapsedDeadlineMs)
+            .putLong(KEY_ACCOUNTABILITY_WALL_START_MS, deadlineState.wallStartMs)
+            .putLong(KEY_ACCOUNTABILITY_WALL_DEADLINE_MS, deadlineState.wallDeadlineMs)
+            .putLong(KEY_ACCOUNTABILITY_LAST_ELAPSED_MS, deadlineState.lastKnownElapsedMs)
+            .putLong(KEY_ACCOUNTABILITY_REMAINING_CHECKPOINT_MS, deadlineState.remainingAtCheckpointMs)
+            .putLong(KEY_ACCOUNTABILITY_ORIGINAL_DURATION_MS, deadlineState.originalDurationMs)
             .apply()
         return true
     }
@@ -254,20 +284,100 @@ class FocusGuardPrefs(context: Context) {
             .remove(KEY_ACCOUNTABILITY_PIN_SALT)
             .remove(KEY_ACCOUNTABILITY_PIN_HASH)
             .remove(KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED)
+            .remove(KEY_ACCOUNTABILITY_WALL_START_MS)
+            .remove(KEY_ACCOUNTABILITY_WALL_DEADLINE_MS)
+            .remove(KEY_ACCOUNTABILITY_LAST_ELAPSED_MS)
+            .remove(KEY_ACCOUNTABILITY_REMAINING_CHECKPOINT_MS)
+            .remove(KEY_ACCOUNTABILITY_ORIGINAL_DURATION_MS)
             .apply()
     }
 
-    /** Stops a zombie "armed" state if a required permission disappears. */
+    fun reconcileDeadlinesAfterReboot() {
+        isAccountabilityLockActive
+        isStrictBlockActive()
+    }
+
+    var isEnforcementPausedForMissingPermission: Boolean
+        get() = prefs.getBoolean(KEY_ENFORCEMENT_PAUSED_MISSING_PERM, false)
+        set(value) = prefs.edit().putBoolean(KEY_ENFORCEMENT_PAUSED_MISSING_PERM, value).apply()
+
+    /**
+     * Marks enforcement paused when a critical permission is revoked, without wiping
+     * Accountability Lock, Strict Mode deadlines, or user arming configuration.
+     */
     fun pauseProtectionForMissingPermission() {
-        isProtectionArmed = false
-        isServiceEnabled = false
-        isGuardActive = false
-        blockEndTime = 0L
-        strictModeStartElapsed = 0L
-        strictModeDurationMs = 0L
-        isStrictModeExitProtectionEnabled = false
-        clearFocusSessionMetadata()
-        clearAccountabilityLock()
+        isEnforcementPausedForMissingPermission = true
+    }
+
+    fun restoreEnforcementAfterPermissionRecovery() {
+        isEnforcementPausedForMissingPermission = false
+    }
+
+    private fun readAccountabilityDeadlineState(): LockDeadlineState {
+        val elapsedDeadline = prefs.getLong(KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED, 0L)
+        val wallStart = prefs.getLong(KEY_ACCOUNTABILITY_WALL_START_MS, 0L)
+        val wallDeadline = prefs.getLong(KEY_ACCOUNTABILITY_WALL_DEADLINE_MS, 0L)
+        val lastElapsed = prefs.getLong(KEY_ACCOUNTABILITY_LAST_ELAPSED_MS, 0L)
+        val remainingCheckpoint = prefs.getLong(KEY_ACCOUNTABILITY_REMAINING_CHECKPOINT_MS, 0L)
+        val originalDuration = prefs.getLong(KEY_ACCOUNTABILITY_ORIGINAL_DURATION_MS, 0L)
+
+        // Legacy fallback if an older version stored only KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED
+        if (wallDeadline <= 0L && elapsedDeadline > 0L) {
+            val nowElapsed = SystemClock.elapsedRealtime()
+            val nowWall = System.currentTimeMillis()
+            val estRemaining = (elapsedDeadline - nowElapsed).coerceAtLeast(0L)
+            return LockDeadlineState(
+                wallStartMs = nowWall,
+                wallDeadlineMs = nowWall + estRemaining,
+                elapsedDeadlineMs = elapsedDeadline,
+                lastKnownElapsedMs = nowElapsed,
+                remainingAtCheckpointMs = estRemaining,
+                originalDurationMs = estRemaining
+            )
+        }
+
+        return LockDeadlineState(
+            wallStartMs = wallStart,
+            wallDeadlineMs = wallDeadline,
+            elapsedDeadlineMs = elapsedDeadline,
+            lastKnownElapsedMs = lastElapsed,
+            remainingAtCheckpointMs = remainingCheckpoint,
+            originalDurationMs = originalDuration
+        )
+    }
+
+    private fun writeAccountabilityDeadlineState(state: LockDeadlineState) {
+        prefs.edit()
+            .putLong(KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED, state.elapsedDeadlineMs)
+            .putLong(KEY_ACCOUNTABILITY_WALL_START_MS, state.wallStartMs)
+            .putLong(KEY_ACCOUNTABILITY_WALL_DEADLINE_MS, state.wallDeadlineMs)
+            .putLong(KEY_ACCOUNTABILITY_LAST_ELAPSED_MS, state.lastKnownElapsedMs)
+            .putLong(KEY_ACCOUNTABILITY_REMAINING_CHECKPOINT_MS, state.remainingAtCheckpointMs)
+            .putLong(KEY_ACCOUNTABILITY_ORIGINAL_DURATION_MS, state.originalDurationMs)
+            .apply()
+    }
+
+    private fun readStrictModeDeadlineState(): LockDeadlineState {
+        val durationMs = strictModeDurationMs.takeIf { it > 0L }
+            ?: (blockDurationMinutes.toLong().coerceAtLeast(1L) * 60_000L)
+        val startElapsed = strictModeStartElapsed
+        val elapsedDeadline = if (startElapsed > 0L) startElapsed + durationMs else 0L
+        val wallDeadline = blockEndTime
+        val wallStart = if (wallDeadline > durationMs) wallDeadline - durationMs else 0L
+        return LockDeadlineState(
+            wallStartMs = wallStart,
+            wallDeadlineMs = wallDeadline,
+            elapsedDeadlineMs = elapsedDeadline,
+            lastKnownElapsedMs = startElapsed,
+            remainingAtCheckpointMs = durationMs,
+            originalDurationMs = durationMs
+        )
+    }
+
+    private fun writeStrictModeDeadlineState(state: LockDeadlineState) {
+        strictModeStartElapsed = state.lastKnownElapsedMs
+        strictModeDurationMs = state.remainingAtCheckpointMs
+        blockEndTime = state.wallDeadlineMs
     }
 
     // ── Daily Schedule (User-Configurable) ──
@@ -848,6 +958,12 @@ class FocusGuardPrefs(context: Context) {
         private const val KEY_ACCOUNTABILITY_PIN_SALT = "accountability_pin_salt"
         private const val KEY_ACCOUNTABILITY_PIN_HASH = "accountability_pin_hash"
         private const val KEY_ACCOUNTABILITY_LOCK_UNTIL_ELAPSED = "accountability_lock_until_elapsed"
+        private const val KEY_ACCOUNTABILITY_WALL_START_MS = "accountability_wall_start_ms"
+        private const val KEY_ACCOUNTABILITY_WALL_DEADLINE_MS = "accountability_wall_deadline_ms"
+        private const val KEY_ACCOUNTABILITY_LAST_ELAPSED_MS = "accountability_last_elapsed_ms"
+        private const val KEY_ACCOUNTABILITY_REMAINING_CHECKPOINT_MS = "accountability_remaining_checkpoint_ms"
+        private const val KEY_ACCOUNTABILITY_ORIGINAL_DURATION_MS = "accountability_original_duration_ms"
+        private const val KEY_ENFORCEMENT_PAUSED_MISSING_PERM = "enforcement_paused_missing_perm"
         private const val KEY_PERMISSION_SETUP_ALLOWED_UNTIL_ELAPSED = "permission_setup_allowed_until_elapsed"
         private const val KEY_BLACKLIST = "blacklisted_apps"
         private const val KEY_WHITELIST = "whitelisted_apps"
