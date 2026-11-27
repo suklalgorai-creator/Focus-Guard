@@ -43,6 +43,22 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
+      - name: Print Unit Test Failure Summary
+        if: failure()
+        run: |
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          for path in sorted(glob.glob("app/build/test-results/testDebugUnitTest/*.xml")):
+              root = ET.parse(path).getroot()
+              for tc in root.findall("testcase"):
+                  for tag in ("failure", "error"):
+                      el = tc.find(tag)
+                      if el is not None:
+                          print(f"FAILED: {tc.attrib.get('classname')}.{tc.attrib.get('name')}")
+                          print(el.attrib.get("message", ""))
+                          print((el.text or "")[:1500])
+          EOF
+
       - name: Run Android Lint
         run: ./gradlew :app:lintDebug --stacktrace
 
