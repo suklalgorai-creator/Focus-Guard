@@ -120,9 +120,9 @@ class InstagramReelsClassifier {
             evidence += "reels_label"
         }
 
-        // Only penalize with non-Reels context when a confirmed viewer ID or selected Reels tab
-        // is absent, so a persistent background tab bar does not suppress an active Reels viewer.
-        if (hasNonReelsContext && !hasClipsViewerId && !hasSelectedReelsTab) {
+        // Only a confirmed Reels viewer ID may override background non-Reels context.
+        // A selected tab label alone must never override active Feed, DM, Profile, or Stories hierarchies.
+        if (hasNonReelsContext && !hasClipsViewerId) {
             score = (score - PENALTY_NON_REELS_CONTEXT).coerceAtLeast(0)
             evidence += "non_reels_context:${nonReelsReasons.joinToString("+")}"
         }
@@ -140,7 +140,7 @@ class InstagramReelsClassifier {
         }
 
         val classification = when {
-            hasNonReelsContext && !hasClipsViewerId && !hasSelectedReelsTab ->
+            hasNonReelsContext && !hasClipsViewerId ->
                 ReelsClassification.NOT_REELS
             score >= THRESHOLD_CONFIRMED && (strongSignalCount >= 1 || structuralSignalCount >= 2) ->
                 ReelsClassification.REELS_CONFIRMED

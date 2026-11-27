@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.focusguard.app.reelcount.data.ReelCountDailyStatsEntity
+import com.focusguard.app.reelcount.data.ReelCountDao
+import com.focusguard.app.reelcount.data.ReelCountLimitStateEntity
 
 /**
  * Room database for FocusGuard.
@@ -16,9 +19,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AttemptEntity::class,
         PyqAttemptEntity::class,
         AppUsageSessionEntity::class,
-        DailyStatsEntity::class
+        DailyStatsEntity::class,
+        ReelCountDailyStatsEntity::class,
+        ReelCountLimitStateEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class FocusGuardDatabase : RoomDatabase() {
@@ -26,6 +31,7 @@ abstract class FocusGuardDatabase : RoomDatabase() {
     abstract fun attemptDao(): AttemptDao
     abstract fun pyqAttemptDao(): PyqAttemptDao
     abstract fun appUsageDao(): AppUsageDao
+    abstract fun reelCountDao(): ReelCountDao
 
     companion object {
         @Volatile
@@ -108,6 +114,37 @@ abstract class FocusGuardDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `reel_count_daily_stats` (
+                        `dateKey` TEXT NOT NULL,
+                        `viewedCount` INTEGER NOT NULL,
+                        `blockedAttempts` INTEGER NOT NULL,
+                        `limitReached` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`dateKey`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_reel_count_daily_stats_updatedAt` ON `reel_count_daily_stats` (`updatedAt`)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `reel_count_limit_state` (
+                        `dateKey` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `lastPromptedAt` INTEGER NOT NULL,
+                        `decisionUpdatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`dateKey`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): FocusGuardDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -115,7 +152,7 @@ abstract class FocusGuardDatabase : RoomDatabase() {
                     FocusGuardDatabase::class.java,
                     "focus_guard.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { INSTANCE = it }
             }

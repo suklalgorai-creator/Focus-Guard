@@ -4,56 +4,40 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Accessibility
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.QueryStats
-import androidx.compose.material.icons.outlined.School
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Security
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,9 +46,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,31 +58,20 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.antibypass.PermissionMonitor
+import com.focusguard.app.persistence.FocusGuardPrefs
 import com.focusguard.app.presentation.profile.ProfileViewModel
-import com.focusguard.app.ui.components.FocusGuardIcon
-import com.focusguard.app.ui.components.FocusGuardIconId
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.components.GradientButton
 import com.focusguard.app.ui.components.SecondaryButton
 import com.focusguard.app.ui.theme.FrictionColors
 import com.focusguard.app.ui.theme.GlassTokens
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
-private data class ExamOption(
-    val id: String,
-    val label: String,
-    val subjects: List<String>
-)
+private enum class ProtectionGoal(val label: String, val subtitle: String) {
+    REELS("Instagram Reels", "Block or set a daily Reels limit."),
+    SHORTS("YouTube Shorts", "Block Shorts while keeping long videos open."),
+    BOTH("Both Reels & Shorts", "Protect your focus across both apps.")
+}
 
-private val examOptions = listOf(
-    ExamOption("neet", "NEET", listOf("Physics", "Chemistry", "Biology")),
-    ExamOption("jee", "JEE", listOf("Physics", "Chemistry", "Mathematics")),
-    ExamOption("upsc", "UPSC", listOf("Polity", "History", "Geography", "Economy"))
-)
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
     profileViewModel: ProfileViewModel,
@@ -105,16 +80,12 @@ fun OnboardingScreen(
     onComplete: () -> Unit
 ) {
     val context = LocalContext.current
+    val app = context.applicationContext as FocusGuardApp
     val lifecycleOwner = LocalLifecycleOwner.current
     val permissionMonitor = remember { PermissionMonitor(context) }
 
-    val today = remember { startOfTodayMillis() }
     var step by remember { mutableIntStateOf(0) }
-    var selectedExam by remember { mutableStateOf("neet") }
-    var targetDate by remember { mutableLongStateOf(0L) }
-    val selectedSubjects = remember { mutableStateListOf<String>() }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var dateError by remember { mutableStateOf(false) }
+    var selectedGoal by remember { mutableStateOf(ProtectionGoal.BOTH) }
 
     var accessibilityReady by remember { mutableStateOf(permissionMonitor.isAccessibilityEnabled()) }
     var overlayReady by remember { mutableStateOf(permissionMonitor.isOverlayPermitted()) }
@@ -132,43 +103,16 @@ fun OnboardingScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(selectedExam) {
-        selectedSubjects.clear()
-        selectedSubjects.addAll(
-            examOptions.first { it.id == selectedExam }.subjects
-        )
-    }
-
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = targetDate.takeIf { it > 0L } ?: (today + 90L * DAY_MS)
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val picked = datePickerState.selectedDateMillis ?: 0L
-                        if (picked <= today) {
-                            dateError = true
-                        } else {
-                            targetDate = picked
-                            dateError = false
-                            showDatePicker = false
-                        }
-                    }
-                ) {
-                    Text("Select", color = GlassTokens.Accents.FocusSession)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel", color = FrictionColors.TextSecondary)
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
+    val applySelectedGoal: () -> Unit = {
+        val surfaces = when (selectedGoal) {
+            ProtectionGoal.REELS -> setOf(FocusGuardPrefs.SURFACE_INSTAGRAM_REELS)
+            ProtectionGoal.SHORTS -> setOf(FocusGuardPrefs.SURFACE_YOUTUBE_SHORTS)
+            ProtectionGoal.BOTH -> setOf(
+                FocusGuardPrefs.SURFACE_INSTAGRAM_REELS,
+                FocusGuardPrefs.SURFACE_YOUTUBE_SHORTS
+            )
         }
+        app.prefs.blockedContentSurfaces = surfaces
     }
 
     Box(
@@ -187,7 +131,7 @@ fun OnboardingScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             item(key = "header") {
                 Row(
@@ -196,21 +140,34 @@ fun OnboardingScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Focus Guard",
-                        color = FrictionColors.TextPrimary,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "Step ${step + 1} of 5",
+                        color = FrictionColors.TextSecondary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
                     )
                     TextButton(
-                        onClick = { profileViewModel.skipOnboarding(onComplete) }
+                        onClick = {
+                            applySelectedGoal()
+                            profileViewModel.skipOnboarding(onComplete)
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp)
                     ) {
-                        Text("Skip", color = FrictionColors.TextSecondary)
+                        Text("Skip", color = FrictionColors.TextSecondary, fontSize = 14.sp)
                     }
                 }
-                StepIndicator(currentStep = step)
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = (step + 1) / 5f,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(999.dp)),
+                    color = GlassTokens.Accents.FocusSession,
+                    trackColor = FrictionColors.SurfaceElevated
+                )
             }
 
-            item(key = "step_content") {
+            item(key = "content") {
                 AnimatedContent(
                     targetState = step,
                     transitionSpec = {
@@ -221,17 +178,27 @@ fun OnboardingScreen(
                 ) { currentStep ->
                     when (currentStep) {
                         0 -> WelcomeStep()
-                        1 -> HowProtectionWorksStep()
-                        2 -> PermissionSetupStep(
+                        1 -> ProtectionGoalsStep(
+                            selectedGoal = selectedGoal,
+                            onSelectGoal = { selectedGoal = it }
+                        )
+                        2 -> EnableProtectionStep(
+                            accessibilityReady = accessibilityReady,
+                            onOpenAccessibility = {
+                                app.prefs.allowPermissionSetupWindow()
+                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            }
+                        )
+                        3 -> SetupChecklistStep(
                             accessibilityReady = accessibilityReady,
                             overlayReady = overlayReady,
                             usageReady = usageReady,
                             onOpenAccessibility = {
-                                FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                                app.prefs.allowPermissionSetupWindow()
                                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                             },
                             onOpenOverlay = {
-                                FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                                app.prefs.allowPermissionSetupWindow()
                                 context.startActivity(
                                     Intent(
                                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -240,32 +207,11 @@ fun OnboardingScreen(
                                 )
                             },
                             onOpenUsage = {
-                                FocusGuardApp.instance.prefs.allowPermissionSetupWindow()
+                                app.prefs.allowPermissionSetupWindow()
                                 context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                             }
                         )
-                        3 -> PersonalizationStep(
-                            isDarkTheme = isDarkTheme,
-                            onToggleTheme = onToggleTheme,
-                            selectedExam = selectedExam,
-                            onExamSelected = { selectedExam = it },
-                            targetDate = targetDate,
-                            dateError = dateError,
-                            onPickDate = { showDatePicker = true },
-                            subjects = examOptions.first { it.id == selectedExam }.subjects,
-                            selectedSubjects = selectedSubjects,
-                            onToggleSubject = { subject ->
-                                if (subject in selectedSubjects) {
-                                    selectedSubjects.remove(subject)
-                                } else {
-                                    selectedSubjects.add(subject)
-                                }
-                            }
-                        )
-                        else -> CompletionStep(
-                            selectedExam = selectedExam,
-                            accessibilityReady = accessibilityReady
-                        )
+                        else -> ReadyStep(accessibilityReady = accessibilityReady)
                     }
                 }
             }
@@ -273,7 +219,7 @@ fun OnboardingScreen(
             item(key = "actions") {
                 val primaryLabel = when (step) {
                     0 -> "Get Started"
-                    LAST_STEP -> "Go to Dashboard"
+                    LAST_STEP -> "Open Focus Guard"
                     else -> "Continue"
                 }
                 GradientButton(
@@ -283,13 +229,18 @@ fun OnboardingScreen(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
                         when {
-                            step < LAST_STEP -> step += 1
-                            else -> profileViewModel.saveProfile(
-                                exam = selectedExam,
-                                targetDate = targetDate,
-                                preferredSubjects = selectedSubjects.toList(),
-                                onSaved = onComplete
-                            )
+                            step < LAST_STEP -> {
+                                if (step == 1) applySelectedGoal()
+                                step += 1
+                            }
+                            else -> {
+                                applySelectedGoal()
+                                if (accessibilityReady) {
+                                    app.prefs.isProtectionArmed = true
+                                    app.prefs.isServiceEnabled = true
+                                }
+                                profileViewModel.skipOnboarding(onComplete)
+                            }
                         }
                     }
                 )
@@ -298,9 +249,11 @@ fun OnboardingScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     TextButton(
                         onClick = { step -= 1 },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                     ) {
-                        Text("Back", color = FrictionColors.TextSecondary)
+                        Text("Back", color = FrictionColors.TextSecondary, fontSize = 14.sp)
                     }
                 }
             }
@@ -310,34 +263,151 @@ fun OnboardingScreen(
 
 @Composable
 private fun WelcomeStep() {
-    OnboardingGlassCard(
-        icon = Icons.Rounded.Security,
-        accent = GlassTokens.Accents.FocusSession,
-        title = "Protect your attention",
-        body = "Focus Guard blocks short-form video traps while keeping your useful chats, lessons, and tools open."
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 20.dp,
+        accentColor = GlassTokens.Accents.FocusSession,
+        backgroundColor = FrictionColors.GlassBackground
     ) {
-        FeatureHighlightRow("Block Instagram Reels & YouTube Shorts", GlassTokens.Accents.AppBlocking)
-        FeatureHighlightRow("Trade distractions for active PYQ recall", GlassTokens.Accents.ProgressStats)
-        FeatureHighlightRow("Build consistent daily focus streaks", GlassTokens.Accents.Schedules)
+        Column(
+            modifier = Modifier.padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Security,
+                contentDescription = null,
+                tint = GlassTokens.Accents.FocusSession,
+                modifier = Modifier.size(34.dp)
+            )
+            Text(
+                text = "Take back control of your time.",
+                color = FrictionColors.TextPrimary,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 32.sp
+            )
+            Text(
+                text = "Focus Guard helps you reduce distractions and build better focus habits.",
+                color = FrictionColors.TextSecondary,
+                fontSize = 15.sp,
+                lineHeight = 22.sp
+            )
+        }
     }
 }
 
 @Composable
-private fun HowProtectionWorksStep() {
-    OnboardingGlassCard(
-        icon = Icons.Rounded.AutoAwesome,
-        accent = GlassTokens.Accents.AppBlocking,
-        title = "How protection works",
-        body = "Protection activates during Focus Sessions or Schedules when required Android permissions are enabled."
-    ) {
-        FeatureHighlightRow("Reels & Shorts Detection: on-device Accessibility check", GlassTokens.Accents.AppBlocking)
-        FeatureHighlightRow("Focus Sessions & Schedules: automatic time-block enforcement", GlassTokens.Accents.Schedules)
-        FeatureHighlightRow("Accountability Lock: trusted PIN protection across reboots", GlassTokens.Accents.AccountabilityLock)
+private fun ProtectionGoalsStep(
+    selectedGoal: ProtectionGoal,
+    onSelectGoal: (ProtectionGoal) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "What would you like to block?",
+            color = FrictionColors.TextPrimary,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "You can change this anytime in Shield.",
+            color = FrictionColors.TextSecondary,
+            fontSize = 14.sp
+        )
+
+        ProtectionGoal.entries.forEach { goal ->
+            val selected = goal == selectedGoal
+            val accent = GlassTokens.Accents.FocusSession
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (selected) accent.copy(alpha = 0.14f) else FrictionColors.Surface)
+                    .border(
+                        width = if (selected) 1.5.dp else 1.dp,
+                        color = if (selected) accent else FrictionColors.GlassBorder,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .clickable(role = Role.RadioButton) { onSelectGoal(goal) }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (selected) accent else FrictionColors.TextMuted
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = goal.label,
+                        color = FrictionColors.TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = goal.subtitle,
+                        color = FrictionColors.TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun PermissionSetupStep(
+private fun EnableProtectionStep(
+    accessibilityReady: Boolean,
+    onOpenAccessibility: () -> Unit
+) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 20.dp,
+        isActive = accessibilityReady,
+        accentColor = if (accessibilityReady) FrictionColors.Success else GlassTokens.Accents.AppBlocking,
+        backgroundColor = FrictionColors.GlassBackground
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Turn on Accessibility access",
+                color = FrictionColors.TextPrimary,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Focus Guard uses Accessibility only to detect blocked apps and Reels or Shorts on your device.",
+                color = FrictionColors.TextSecondary,
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
+            Text(
+                text = "We never collect messages, captions, or passwords.",
+                color = FrictionColors.TextSecondary,
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
+            Text(
+                text = if (accessibilityReady) "Status: Enabled" else "Status: Not enabled yet",
+                color = if (accessibilityReady) FrictionColors.Success else FrictionColors.Warning,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (!accessibilityReady) {
+                SecondaryButton(
+                    text = "Open Accessibility Settings",
+                    onClick = onOpenAccessibility
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupChecklistStep(
     accessibilityReady: Boolean,
     overlayReady: Boolean,
     usageReady: Boolean,
@@ -345,316 +415,127 @@ private fun PermissionSetupStep(
     onOpenOverlay: () -> Unit,
     onOpenUsage: () -> Unit
 ) {
-    OnboardingGlassCard(
-        icon = Icons.Outlined.Accessibility,
-        accent = GlassTokens.Accents.AppBlocking,
-        title = "Permission setup",
-        body = "Accessibility is required for core blocking. Overlay and Usage Access are optional and enhance PYQ challenges and analytics."
-    ) {
-        PermissionActionRow(
-            icon = Icons.Outlined.Accessibility,
-            title = "Accessibility Service (Required)",
-            subtitle = "Detects Reels, Shorts, and blocked apps on device.",
-            ready = accessibilityReady,
-            onClick = onOpenAccessibility
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Setup checklist",
+            color = FrictionColors.TextPrimary,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
         )
-        PermissionActionRow(
-            icon = Icons.Outlined.Layers,
-            title = "Display Over Other Apps (Optional)",
-            subtitle = "Displays interactive PYQ challenges over blocked surfaces.",
-            ready = overlayReady,
-            onClick = onOpenOverlay
-        )
-        PermissionActionRow(
-            icon = Icons.Outlined.QueryStats,
-            title = "Usage Access (Optional)",
-            subtitle = "Enables backup detection and screen-time analytics.",
-            ready = usageReady,
-            onClick = onOpenUsage
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-@Composable
-private fun PersonalizationStep(
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
-    selectedExam: String,
-    onExamSelected: (String) -> Unit,
-    targetDate: Long,
-    dateError: Boolean,
-    onPickDate: () -> Unit,
-    subjects: List<String>,
-    selectedSubjects: List<String>,
-    onToggleSubject: (String) -> Unit
-) {
-    OnboardingGlassCard(
-        icon = Icons.Outlined.School,
-        accent = GlassTokens.Accents.StudyFlow,
-        title = "Personalize Focus Guard",
-        body = "Pick your theme, exam track, and optional target date."
-    ) {
-        SecondaryButton(
-            text = if (isDarkTheme) "Theme: Dark Glass" else "Theme: Light Glass",
-            accentColor = GlassTokens.Accents.FocusSession,
-            leadingIcon = if (isDarkTheme) Icons.Outlined.DarkMode else Icons.Outlined.LightMode,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onToggleTheme
+        Text(
+            text = "Only Accessibility is required. Other permissions are optional.",
+            color = FrictionColors.TextSecondary,
+            fontSize = 14.sp
         )
 
-        examOptions.forEach { option ->
-            SelectableRow(
-                title = option.label,
-                subtitle = option.subjects.joinToString(", "),
-                selected = selectedExam == option.id,
-                onClick = { onExamSelected(option.id) }
-            )
-        }
-
-        OutlinedButton(
-            onClick = onPickDate,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(GlassTokens.Radius.sm)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.CalendarMonth,
-                contentDescription = null,
-                tint = GlassTokens.Accents.Schedules,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = if (targetDate > 0L) "Target: ${formatDate(targetDate)}" else "Set target date (Optional)",
-                color = FrictionColors.TextPrimary
-            )
-        }
-        if (dateError) {
-            Text(
-                text = "Choose a future date.",
-                color = GlassTokens.Accents.AccountabilityLock,
-                fontSize = 12.sp
-            )
-        }
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            subjects.forEach { subject ->
-                FilterChip(
-                    selected = subject in selectedSubjects,
-                    onClick = { onToggleSubject(subject) },
-                    label = { Text(subject) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompletionStep(
-    selectedExam: String,
-    accessibilityReady: Boolean
-) {
-    OnboardingGlassCard(
-        icon = Icons.Rounded.CheckCircle,
-        accent = GlassTokens.Accents.ProgressStats,
-        title = "You're ready to focus",
-        body = "Your ${selectedExam.uppercase(Locale.getDefault())} profile is configured. You can adjust permissions, schedules, and blocked apps anytime."
-    ) {
-        FeatureHighlightRow(
-            text = if (accessibilityReady) {
-                "Accessibility is active — ready to arm protection."
-            } else {
-                "Next: enable Accessibility on the setup gate to arm blocking."
-            },
-            accent = if (accessibilityReady) GlassTokens.Accents.ProgressStats else GlassTokens.Accents.Schedules
+        ChecklistRow(
+            title = "Accessibility access (Required)",
+            subtitle = "Detects blocked apps, Reels, and Shorts.",
+            granted = accessibilityReady,
+            onFix = onOpenAccessibility
+        )
+        ChecklistRow(
+            title = "Display over apps (Optional)",
+            subtitle = "Shows the block challenge and floating Reel counter.",
+            granted = overlayReady,
+            onFix = onOpenOverlay
+        )
+        ChecklistRow(
+            title = "Usage access (Optional)",
+            subtitle = "Improves daily app time insights.",
+            granted = usageReady,
+            onFix = onOpenUsage
         )
     }
 }
 
 @Composable
-private fun OnboardingGlassCard(
-    icon: ImageVector,
-    accent: Color,
+private fun ChecklistRow(
     title: String,
-    body: String,
-    content: @Composable () -> Unit
+    subtitle: String,
+    granted: Boolean,
+    onFix: () -> Unit
 ) {
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = GlassTokens.Radius.lg,
-        accentColor = accent,
-        backgroundColor = FrictionColors.GlassBackground
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (icon == Icons.Rounded.Security) {
-                FocusGuardIcon(
-                    iconId = FocusGuardIconId.BrandShieldBrain,
-                    contentDescription = null,
-                    tileSize = 48.dp,
-                    showGlassTile = true,
-                    selected = true
-                )
-            } else {
-                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(28.dp))
+    val statusText = if (granted) "Ready" else "Set up"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(FrictionColors.Surface)
+            .border(1.dp, FrictionColors.GlassBorder, RoundedCornerShape(16.dp))
+            .clickable(enabled = !granted, onClick = onFix)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$title. $statusText"
             }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = if (granted) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+            contentDescription = null,
+            tint = if (granted) FrictionColors.Success else FrictionColors.Warning
+        )
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 color = FrictionColors.TextPrimary,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 28.sp
-            )
-            Text(
-                text = body,
-                color = FrictionColors.TextSecondary,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            content()
-        }
-    }
-}
-
-@Composable
-private fun FeatureHighlightRow(text: String, accent: Color) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(GlassTokens.Radius.sm))
-            .background(accent.copy(alpha = 0.10f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(accent)
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = text,
-            color = FrictionColors.TextPrimary,
-            fontSize = 13.sp,
-            lineHeight = 18.sp
-        )
-    }
-}
-
-@Composable
-private fun PermissionActionRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    ready: Boolean,
-    onClick: () -> Unit
-) {
-    val accent = if (ready) GlassTokens.Accents.ProgressStats else GlassTokens.Accents.AppBlocking
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(GlassTokens.Radius.sm))
-            .background(FrictionColors.SurfaceElevated.copy(alpha = 0.7f))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(22.dp))
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = FrictionColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = FrictionColors.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = if (ready) "Ready" else "Setup",
-            color = accent,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun SelectableRow(
-    title: String,
-    subtitle: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(GlassTokens.Radius.sm))
-            .clickable(onClick = onClick)
-            .background(
-                color = if (selected) GlassTokens.Accents.StudyFlow.copy(alpha = 0.16f) else FrictionColors.SurfaceElevated,
-                shape = RoundedCornerShape(GlassTokens.Radius.sm)
-            )
-            .padding(14.dp)
-    ) {
-        Column {
-            Text(
-                text = title,
-                color = if (selected) GlassTokens.Accents.StudyFlow else FrictionColors.TextPrimary,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = subtitle,
                 color = FrictionColors.TextSecondary,
-                fontSize = 12.sp
+                fontSize = 13.sp
             )
         }
+        Text(
+            text = statusText,
+            color = if (granted) FrictionColors.Success else GlassTokens.Accents.FocusSession,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
 @Composable
-private fun StepIndicator(currentStep: Int) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+private fun ReadyStep(accessibilityReady: Boolean) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 20.dp,
+        isActive = accessibilityReady,
+        accentColor = FrictionColors.Success,
+        backgroundColor = FrictionColors.GlassBackground
     ) {
-        repeat(LAST_STEP + 1) { index ->
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(4.dp)
-                    .background(
-                        color = if (index <= currentStep) {
-                            GlassTokens.Accents.FocusSession
-                        } else {
-                            FrictionColors.SurfaceElevated
-                        },
-                        shape = RoundedCornerShape(2.dp)
-                    )
+        Column(
+            modifier = Modifier.padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = FrictionColors.Success,
+                modifier = Modifier.size(34.dp)
+            )
+            Text(
+                text = "You're ready.",
+                color = FrictionColors.TextPrimary,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (accessibilityReady) {
+                    "Protection is active. You can start a focus session anytime from Today."
+                } else {
+                    "You can finish turning on Accessibility anytime from Today."
+                },
+                color = FrictionColors.TextSecondary,
+                fontSize = 15.sp,
+                lineHeight = 21.sp
             )
         }
     }
 }
 
-private fun formatDate(timestamp: Long): String {
-    return SimpleDateFormat("dd MMM yyyy", Locale.US).format(Date(timestamp))
-}
-
-private fun startOfTodayMillis(): Long {
-    val calendar = java.util.Calendar.getInstance().apply {
-        set(java.util.Calendar.HOUR_OF_DAY, 0)
-        set(java.util.Calendar.MINUTE, 0)
-        set(java.util.Calendar.SECOND, 0)
-        set(java.util.Calendar.MILLISECOND, 0)
-    }
-    return calendar.timeInMillis
-}
-
 private const val LAST_STEP = 4
-private const val DAY_MS = 24L * 60L * 60L * 1000L

@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.presentation.usage.UsageStatsViewModel
+import com.focusguard.app.reelcount.ui.ReelCountProgressCard
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.components.GradientButton
 import com.focusguard.app.ui.components.SecondaryButton
@@ -81,84 +82,98 @@ fun ProgressHubScreen(
             )
         }
 
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatItem(
-                    label = "Saved today",
-                    value = formatDuration(usageState.today.timeSavedMs),
-                    icon = Icons.Rounded.CheckCircle,
-                    modifier = Modifier.weight(1f),
-                    accent = FrictionColors.Success
-                )
-                StatItem(
-                    label = "Blocks today",
-                    value = usageState.today.sessionsBlocked.toString(),
-                    icon = Icons.Rounded.Block,
-                    modifier = Modifier.weight(1f),
-                    accent = FrictionColors.Accent
-                )
-            }
-        }
+        val hasProgressData = usageState.today.timeSavedMs > 0L ||
+            usageState.today.sessionsBlocked > 0 ||
+            weeklyBlockedMinutes > 0L ||
+            pyqsToday > 0
 
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatItem(
-                    label = "Streak",
-                    value = "${streakDays}d",
-                    icon = Icons.Rounded.AutoAwesome,
-                    modifier = Modifier.weight(1f),
-                    accent = FrictionColors.Warning
-                )
-                StatItem(
-                    label = "PYQs today",
-                    value = pyqsToday.toString(),
-                    icon = Icons.Rounded.School,
-                    modifier = Modifier.weight(1f),
-                    accent = FrictionColors.Accent
-                )
-            }
-        }
-
-        item {
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 16.dp,
-                accentColor = GlassTokens.Accents.ProgressStats,
-                backgroundColor = FrictionColors.GlassBackground
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+        if (!hasProgressData) {
+            item {
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 18.dp,
+                    accentColor = GlassTokens.Accents.ProgressStats,
+                    backgroundColor = FrictionColors.GlassBackground
                 ) {
-                    Text(
-                        text = "This week",
-                        color = FrictionColors.TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "No activity yet",
+                            color = FrictionColors.TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        )
+                        Text(
+                            text = "Your progress will appear here as you use Focus Guard.",
+                            color = FrictionColors.TextSecondary,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+            }
+        } else {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StatItem(
+                        label = "Saved today",
+                        value = formatDuration(usageState.today.timeSavedMs),
+                        icon = Icons.Rounded.CheckCircle,
+                        modifier = Modifier.weight(1f),
+                        accent = FrictionColors.Success
                     )
-                    ProgressInsightRow(
-                        label = "Top trigger",
-                        value = topTrigger?.appName ?: "No clear trigger yet"
-                    )
-                    ProgressInsightRow(
-                        label = "Distracting time",
-                        value = if (weeklyBlockedMinutes > 0L) "${weeklyBlockedMinutes}m this week" else "Calm week so far"
-                    )
-                    ProgressInsightRow(
-                        label = "Bounce-back angle",
-                        value = if (usageState.today.sessionsBlocked > 0) {
-                            "Use a 10 minute sprint right after a block to train recovery."
-                        } else {
-                            "No recovery drills needed yet today."
-                        }
+                    StatItem(
+                        label = "Blocks today",
+                        value = usageState.today.sessionsBlocked.toString(),
+                        icon = Icons.Rounded.Block,
+                        modifier = Modifier.weight(1f),
+                        accent = FrictionColors.Accent
                     )
                 }
+            }
+
+            item {
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 16.dp,
+                    accentColor = GlassTokens.Accents.ProgressStats,
+                    backgroundColor = FrictionColors.GlassBackground
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "This week",
+                            color = FrictionColors.TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        )
+                        ProgressInsightRow(
+                            label = "Streak",
+                            value = "${streakDays}d"
+                        )
+                        ProgressInsightRow(
+                            label = "Top trigger",
+                            value = topTrigger?.appName ?: "No clear trigger yet"
+                        )
+                        ProgressInsightRow(
+                            label = "Distracting time",
+                            value = if (weeklyBlockedMinutes > 0L) "${weeklyBlockedMinutes}m this week" else "Calm week so far"
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            if (app.reelCountRepository.currentSettings().enabled) {
+                ReelCountProgressCard(app = app)
             }
         }
 

@@ -5,7 +5,9 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.focusguard.app.BuildConfig
+import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.persistence.FocusGuardPrefs
+import com.focusguard.app.reelcount.domain.ReelObservation
 import java.util.ArrayDeque
 
 data class ContentSurfaceMatch(
@@ -34,8 +36,10 @@ class BlockedSurfaceDetector(
         rootNode: AccessibilityNodeInfo?
     ): ContentSurfaceMatch? {
         val packageName = event.packageName?.toString() ?: return null
+        val isInstagram = packageName == INSTAGRAM_PACKAGE || packageName == INSTAGRAM_LITE_PACKAGE
+        val reelCountEnabled = FocusGuardApp.instance.reelCountRepository.currentSettings().enabled
 
-        if (!prefs.isGuardActiveNow()) {
+        if (!prefs.isGuardActiveNow() && !(isInstagram && reelCountEnabled)) {
             reelsStabilizer.reset()
             return null
         }
@@ -43,7 +47,10 @@ class BlockedSurfaceDetector(
 
         return when (packageName) {
             INSTAGRAM_PACKAGE, INSTAGRAM_LITE_PACKAGE -> detectInstagramReels(packageName, event, rootNode)
-            YOUTUBE_PACKAGE -> detectYoutubeShorts(packageName, event, rootNode)
+            YOUTUBE_PACKAGE -> {
+                if (!prefs.isGuardActiveNow()) return null
+                detectYoutubeShorts(packageName, event, rootNode)
+            }
             else -> {
                 reelsStabilizer.onForegroundPackageChanged(packageName)
                 null
@@ -79,7 +86,12 @@ class BlockedSurfaceDetector(
         event: AccessibilityEvent,
         rootNode: AccessibilityNodeInfo?
     ): ContentSurfaceMatch? {
-        if (!prefs.blockedContentSurfaces.contains(FocusGuardPrefs.SURFACE_INSTAGRAM_REELS)) {
+        val coordinator = FocusGuardApp.instance.reelCountCoordinator
+        val policyDecision = coordinator.evaluateReelsBlockingPolicy()
+        val reelCountEnabled = FocusGuardApp.instance.reelCountRepository.currentSettings().enabled
+
+        // Skip expensive hierarchy traversal if neither blocking policy nor Reel Count is active.
+        if (!policyDecision.shouldBlock && !reelCountEnabled) {
             return null
         }
 
@@ -100,16 +112,60 @@ class BlockedSurfaceDetector(
             decision = decision
         )
 
+        if (!policyDecision.shouldBlock) {
+            if (reelCountEnabled) {
+                val eventClassName = event.className?.toString().orEmpty()
+                val isScrollTransition = event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED &&
+                    (eventClassName.contains("ViewPager", ignoreCase = true) ||
+                        eventClassName.contains("RecyclerView", ignoreCase = true))
+                val isSubtreeChange = event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+                    (event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_SUBTREE) != 0
+                val hasClipsViewerId = signals.viewIds.any { id ->
+                    id.contains("clips_viewer") || id.contains("reels_viewer") || id.contains("clips_video_container")
+                }
+
+                coordinator.onInstagramObservation(
+                    ReelObservation(
+                        packageName = packageName,
+                        classification = decision.stableState,
+                        confidenceScore = result.confidenceScore,
+                        hasClipsViewerId = hasClipsViewerId,
+                        isScrollTransition = isScrollTransition,
+                        isSubtreeContentChange = isSubtreeChange,
+                        contentSignature = snapshot.contentSignature(),
+                        isBlockedByPolicy = false
+                    )
+                )
+            }
+            return null
+        }
+
         if (!decision.shouldTriggerBlock) {
             return null
         }
+
+        GuardDiagnostics.logEvent(
+            GuardDiagnostics.REELS_DETECTED,
+            "pkg=$packageName score=${result.confidenceScore} source=${policyDecision.source}"
+        )
+        val reasonEvent = when {
+            policyDecision.source == com.focusguard.app.reelcount.domain.ReelsBlockSource.REEL_COUNT_LIMIT ->
+                GuardDiagnostics.BLOCK_REASON_REEL_LIMIT
+            prefs.isStrictBlockActive() ->
+                GuardDiagnostics.BLOCK_REASON_STRICT_MODE
+            prefs.isWithinSchedule() ->
+                GuardDiagnostics.BLOCK_REASON_SCHEDULE
+            else ->
+                GuardDiagnostics.BLOCK_REASON_FOCUS_SESSION
+        }
+        GuardDiagnostics.logEvent(reasonEvent, "surface=instagram_reels")
 
         return ContentSurfaceMatch(
             surfaceId = FocusGuardPrefs.SURFACE_INSTAGRAM_REELS,
             blockKey = "${packageName}:${FocusGuardPrefs.SURFACE_INSTAGRAM_REELS}",
             packageName = packageName,
-            title = "Instagram Reels",
-            message = "Reels are blocked during focus hours. Feed, DMs, and stories can stay open."
+            title = policyDecision.title,
+            message = policyDecision.message
         )
     }
 
@@ -151,6 +207,17 @@ class BlockedSurfaceDetector(
             return null
         }
 
+        GuardDiagnostics.logEvent(
+            GuardDiagnostics.SHORTS_DETECTED,
+            "pkg=$packageName"
+        )
+        val reasonEvent = when {
+            prefs.isStrictBlockActive() -> GuardDiagnostics.BLOCK_REASON_STRICT_MODE
+            prefs.isWithinSchedule() -> GuardDiagnostics.BLOCK_REASON_SCHEDULE
+            else -> GuardDiagnostics.BLOCK_REASON_FOCUS_SESSION
+        }
+        GuardDiagnostics.logEvent(reasonEvent, "surface=youtube_shorts")
+
         val distractingMatch = result.matchedChannel
         val message = if (distractingMatch != null) {
             "$distractingMatch is marked as distracting. Shorts stay blocked during focus hours."
@@ -177,6 +244,21 @@ class BlockedSurfaceDetector(
         val wasTruncated: Boolean,
         val hasRootNode: Boolean
     ) {
+        /**
+         * Ephemeral, privacy-safe structural hash of the visible Reels hierarchy used solely
+         * for in-memory deduplication of the currently resting Reel. Never persisted.
+         */
+        fun contentSignature(): Int {
+            if (texts.isEmpty() && viewIds.isEmpty()) return 0
+            var hash = 17
+            // Sample up to first 12 text tokens (e.g. handle/caption/audio length & hash) without storing raw strings.
+            texts.take(12).forEach { token ->
+                hash = 31 * hash + token.hashCode()
+            }
+            hash = 31 * hash + viewIds.size
+            return hash
+        }
+
         fun toReelsSignals(packageName: String, event: AccessibilityEvent?): ReelsHierarchySignals {
             val eventType = event?.eventType ?: 0
             return ReelsHierarchySignals(

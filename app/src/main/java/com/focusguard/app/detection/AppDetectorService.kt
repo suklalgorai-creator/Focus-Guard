@@ -10,6 +10,9 @@ import com.focusguard.app.antibypass.SettingsBlocker
 import com.focusguard.app.blocking.DetectionSource
 import com.focusguard.app.friction.FrictionOrchestrator
 import com.focusguard.app.overlay.OverlayManager
+import com.focusguard.app.persistence.FocusGuardPrefs
+import com.focusguard.app.reelcount.overlay.ReelCountFloatingOverlay
+import com.focusguard.app.reelcount.overlay.ReelCountLimitDialogOverlay
 
 /**
  * Primary detection layer backed by AccessibilityService.
@@ -28,6 +31,8 @@ class AppDetectorService : AccessibilityService() {
     private lateinit var focusedSurfaceBlocker: FocusedSurfaceBlocker
     private lateinit var foregroundAppDetector: ForegroundAppDetector
     private lateinit var permissionMonitor: PermissionMonitor
+    private lateinit var reelCountFloatingOverlay: ReelCountFloatingOverlay
+    private lateinit var reelCountLimitDialogOverlay: ReelCountLimitDialogOverlay
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -38,7 +43,8 @@ class AppDetectorService : AccessibilityService() {
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED or
                 AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
                 AccessibilityEvent.TYPE_VIEW_CLICKED or
-                AccessibilityEvent.TYPE_VIEW_SELECTED
+                AccessibilityEvent.TYPE_VIEW_SELECTED or
+                AccessibilityEvent.TYPE_VIEW_SCROLLED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 50
             flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
@@ -60,6 +66,21 @@ class AppDetectorService : AccessibilityService() {
         foregroundAppDetector = ForegroundAppDetector(this)
         permissionMonitor = PermissionMonitor(this)
 
+        val app = FocusGuardApp.instance
+        reelCountFloatingOverlay = ReelCountFloatingOverlay(
+            context = this,
+            repository = app.reelCountRepository,
+            coordinator = app.reelCountCoordinator,
+            prefs = app.prefs
+        ).also { it.start() }
+
+        reelCountLimitDialogOverlay = ReelCountLimitDialogOverlay(
+            context = this,
+            coordinator = app.reelCountCoordinator,
+            prefs = app.prefs,
+            onExitReelsRequested = { forceBack() }
+        ).also { it.start() }
+
         instance = this
         Log.d(TAG, "All components initialized and ready")
     }
@@ -76,6 +97,13 @@ class AppDetectorService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_VIEW_SELECTED -> handleContentChange(packageName, safeEvent)
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                if (isInstagramPackage(packageName) &&
+                    FocusGuardApp.instance.reelCountRepository.currentSettings().enabled
+                ) {
+                    handleContentChange(packageName, safeEvent)
+                }
+            }
         }
     }
 
@@ -110,7 +138,10 @@ class AppDetectorService : AccessibilityService() {
             return
         }
 
-        if (!blockingManager.canBlockNow(DetectionSource.ACCESSIBILITY)) return
+        val canEvaluateSurface = blockingManager.canBlockNow(DetectionSource.ACCESSIBILITY) ||
+            (isInstagramPackage(packageName) &&
+                FocusGuardApp.instance.reelCountRepository.currentSettings().enabled)
+        if (!canEvaluateSurface || focusedSurfaceBlocker.isSurfaceBlockActive) return
 
         val surfaceMatch = surfaceDetector.detect(event, rootInActiveWindow) ?: return
         Log.w(TAG, "Focused surface blocked: ${surfaceMatch.blockKey}")
@@ -120,6 +151,7 @@ class AppDetectorService : AccessibilityService() {
     private fun handleWindowChange(packageName: String, event: AccessibilityEvent) {
         val prefs = FocusGuardApp.instance.prefs
         FocusGuardApp.instance.trackingManager.onForegroundAppChanged(packageName)
+        FocusGuardApp.instance.reelCountCoordinator.onForegroundPackageChanged(packageName)
         surfaceDetector.onForegroundPackageChanged(packageName)
 
         val blockingManager = FocusGuardApp.instance.blockingManager
@@ -146,6 +178,15 @@ class AppDetectorService : AccessibilityService() {
 
         if (!blockingManager.canBlockPackageNow(packageName, DetectionSource.ACCESSIBILITY)) {
             if (blockingManager.currentBlockedPackage != null) onBlockedAppClosed()
+            if (isInstagramPackage(packageName) &&
+                FocusGuardApp.instance.reelCountRepository.currentSettings().enabled
+            ) {
+                val surfaceMatch = surfaceDetector.detect(event, rootInActiveWindow)
+                if (surfaceMatch != null) {
+                    Log.w(TAG, "Reel Count surface blocked on window transition: ${surfaceMatch.blockKey}")
+                    focusedSurfaceBlocker.onSurfaceDetected(surfaceMatch)
+                }
+            }
             return
         }
 
@@ -219,13 +260,21 @@ class AppDetectorService : AccessibilityService() {
 
     override fun onDestroy() {
         Log.w(TAG, "AccessibilityService destroyed")
+        if (::reelCountFloatingOverlay.isInitialized) reelCountFloatingOverlay.destroy()
+        if (::reelCountLimitDialogOverlay.isInitialized) reelCountLimitDialogOverlay.destroy()
         if (::focusedSurfaceBlocker.isInitialized) focusedSurfaceBlocker.destroy()
         if (::settingsBlocker.isInitialized) settingsBlocker.destroy()
         if (::overlayManager.isInitialized) overlayManager.destroy()
+        FocusGuardApp.instance.reelCountCoordinator.onForegroundPackageChanged(null)
         FocusGuardApp.instance.trackingManager.flushCurrentSession()
         FocusGuardApp.instance.blockingManager.reset()
         instance = null
         super.onDestroy()
+    }
+
+    private fun isInstagramPackage(packageName: String): Boolean {
+        return packageName == FocusGuardPrefs.INSTAGRAM_PACKAGE ||
+            packageName == FocusGuardPrefs.INSTAGRAM_LITE_PACKAGE
     }
 
     private fun isSettingsOrInstallerPackage(packageName: String): Boolean {

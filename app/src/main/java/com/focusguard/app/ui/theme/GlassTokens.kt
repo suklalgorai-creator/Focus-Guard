@@ -20,6 +20,7 @@ object GlassTokens {
         val Schedules = Color(0xFFFBBF24)          // Amber
         val AccountabilityLock = Color(0xFFFB7185) // Rose
         val StudyFlow = Color(0xFF818CF8)          // Indigo
+        val ReelCount = Color(0xFFF472B6)          // Pink
     }
 
     object Spacing {

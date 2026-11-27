@@ -34,6 +34,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.presentation.profile.ProfileViewModel
+import com.focusguard.app.reelcount.ui.ReelCountSettingsCard
 import com.focusguard.app.ui.components.FocusGuardIconId
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.components.SecondaryButton
@@ -155,6 +156,10 @@ fun YouHubScreen(
         }
 
         item {
+            ReelCountSettingsCard(app = app)
+        }
+
+        item {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 cornerRadius = 16.dp,
@@ -173,8 +178,8 @@ fun YouHubScreen(
                     Text(
                         text = "Theme, notifications, and trust setup.",
                         color = FrictionColors.TextSecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),

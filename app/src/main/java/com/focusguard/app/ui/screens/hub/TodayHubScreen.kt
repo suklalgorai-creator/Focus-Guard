@@ -58,6 +58,7 @@ import com.focusguard.app.domain.settings.FocusSettings
 import com.focusguard.app.persistence.DistractionRecoverySnapshot
 import com.focusguard.app.persistence.FocusGuardPrefs
 import com.focusguard.app.presentation.usage.UsageStatsViewModel
+import com.focusguard.app.reelcount.ui.ReelCountTodayCard
 import com.focusguard.app.ui.components.FocusGuardIconId
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.components.GradientButton
@@ -129,25 +130,23 @@ fun TodayHubScreen(
         .maxByOrNull { it.usageTimeMs }
 
     val statusTitle = when {
-        guardArmed -> "Protection Armed"
-        coreReady -> "Protection Ready"
-        else -> "Protection Incomplete"
+        !accessibilityEnabled -> "Protection paused"
+        guardArmed -> "Protection active"
+        else -> "Ready to focus"
     }
     val statusBody = when {
+        !accessibilityEnabled ->
+            "Turn on Accessibility access to resume blocking."
         guardArmed ->
             if (focusSettings.isStrictModeEnabled) {
-                "Strict Mode is live. Blocked apps are being intercepted."
+                "Strict Mode is running. Distracting apps and Reels are blocked."
             } else {
-                "Focus window is live. Blocked apps are being intercepted."
+                "Focus session is active. Distracting apps and Reels are blocked."
             }
-        !accessibilityEnabled ->
-            "Turn on Accessibility to start blocking."
-        !overlayEnabled ->
-            "Overlay is off. Blocking still works, but the challenge screen will not appear."
         prefs.isScheduleEnabled ->
-            "${prefs.studyBlocks.count { it.enabled }} study block(s) set. Pick apps to block."
+            "${prefs.studyBlocks.count { it.enabled }} schedule(s) ready. Start Focus anytime."
         else ->
-            "Pick apps, then start Focus."
+            "Start a focus session to block distractions."
     }
 
     val nextWindowSummary = if (prefs.isScheduleEnabled) {
@@ -252,6 +251,15 @@ fun TodayHubScreen(
         }
 
         item {
+            if (app.reelCountRepository.currentSettings().enabled) {
+                ReelCountTodayCard(
+                    app = app,
+                    onOpenSettings = onOpenYou
+                )
+            }
+        }
+
+        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -264,7 +272,7 @@ fun TodayHubScreen(
                     onClick = onOpenFocus
                 )
                 SecondaryButton(
-                    text = "Open Shield",
+                    text = "Shield",
                     accentColor = GlassTokens.Accents.AppBlocking,
                     leadingIcon = Icons.Rounded.Security,
                     modifier = Modifier.weight(1f),
@@ -296,96 +304,23 @@ fun TodayHubScreen(
         }
 
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatItem(
-                    label = "Current streak",
-                    value = "${streakDays}d",
-                    icon = Icons.Rounded.AutoAwesome,
-                    modifier = Modifier.weight(1f),
-                    accent = GlassTokens.Accents.Schedules
-                )
-                StatItem(
-                    label = "Apps blocked",
-                    value = enforcedAppCount.toString(),
-                    icon = Icons.Rounded.Block,
-                    modifier = Modifier.weight(1f),
-                    accent = GlassTokens.Accents.AppBlocking
-                )
+            val nextTitle = when {
+                !accessibilityEnabled -> "Complete setup"
+                enforcedAppCount == 0 -> "Pick apps to block"
+                else -> "Next focus window"
             }
-        }
-
-        item {
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 16.dp,
-                accentColor = GlassTokens.Accents.Schedules,
-                backgroundColor = FrictionColors.Surface.copy(alpha = 0.92f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Next steps",
-                        color = FrictionColors.TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
-                    )
-                    ProgressInsightRow(
-                        label = "Block rule",
-                        value = "Selected apps are blocked on launch."
-                    )
-                    ProgressInsightRow(
-                        label = "Top trigger",
-                        value = topTrigger?.appName ?: "No clear trigger yet"
-                    )
-                    ProgressInsightRow(
-                        label = "Schedule window",
-                        value = nextWindowSummary
-                    )
-                    ProgressInsightRow(
-                        label = "Study YouTube mode",
-                        value = if (youtubeShieldEnabled) {
-                            "Shorts blocked. $productiveChannels channels allowed."
-                        } else {
-                            "Shorts guard is off right now."
-                        }
-                    )
-                }
+            val nextSubtitle = when {
+                !accessibilityEnabled -> "Enable Accessibility access so Focus Guard can block distractions."
+                enforcedAppCount == 0 -> "Choose distracting apps or Reels/Shorts in Shield."
+                else -> nextWindowSummary
             }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                SecondaryButton(
-                    text = "Solve PYQ",
-                    leadingIcon = Icons.Rounded.School,
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenPyq
-                )
-                SecondaryButton(
-                    text = "Open Progress",
-                    leadingIcon = Icons.Rounded.Analytics,
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenProgress
-                )
-            }
-        }
-
-        item {
             HubActionCard(
-                title = "${prefs.targetExam.uppercase(Locale.getDefault())} setup",
-                subtitle = "Exam, profile, and permission setup.",
-                icon = Icons.Rounded.Person,
-                accent = FocusGuardIconId.Account.accentColor,
-                iconId = FocusGuardIconId.Account,
-                onClick = onOpenYou
+                title = nextTitle,
+                subtitle = nextSubtitle,
+                icon = Icons.Rounded.Security,
+                accent = GlassTokens.Accents.Schedules,
+                iconId = FocusGuardIconId.Schedule,
+                onClick = if (!accessibilityEnabled || enforcedAppCount == 0) onOpenShield else onOpenFocus
             )
         }
     }

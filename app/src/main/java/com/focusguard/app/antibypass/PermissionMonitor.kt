@@ -12,6 +12,7 @@ import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.focusguard.app.FocusGuardApp
+import com.focusguard.app.detection.GuardDiagnostics
 
 /**
  * Monitors critical permissions and alerts when they're disabled.
@@ -52,6 +53,10 @@ class PermissionMonitor(private val context: Context) {
         val prefs = FocusGuardApp.instance.prefs
 
         if (!summary.canEnforceCoreBlocking && prefs.isProtectionArmed) {
+            GuardDiagnostics.logEvent(
+                GuardDiagnostics.PERMISSION_UNAVAILABLE,
+                "accessibility=${snapshot.accessibilityEnabled} overlay=${snapshot.overlayEnabled} usage=${snapshot.usageStatsEnabled}"
+            )
             Log.w(
                 TAG,
                 "Core permission missing: accessibility=${snapshot.accessibilityEnabled}, " +
@@ -73,6 +78,7 @@ class PermissionMonitor(private val context: Context) {
                 prefs.lastPermissionCheckFailed = false
                 prefs.restoreEnforcementAfterPermissionRecovery()
                 NotificationManagerCompat.from(context).cancel(ALERT_NOTIFICATION_ID)
+                GuardDiagnostics.logEvent(GuardDiagnostics.PROTECTION_RECOVERED)
                 Log.i(TAG, "Core permissions restored; enforcement resumed")
             }
         }

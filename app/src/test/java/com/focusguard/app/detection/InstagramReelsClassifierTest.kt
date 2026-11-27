@@ -354,6 +354,20 @@ class InstagramReelsClassifierTest {
         assertEquals(ReelsClassification.UNKNOWN, decayed.stableState)
     }
 
+    @Test
+    fun selectedReelsLabelWithFeedTimelineAndNoViewerId_returnsNotReels() {
+        val signals = ReelsHierarchySignals(
+            packageName = INSTAGRAM,
+            viewIds = setOf("com.instagram.android:id/feed_timeline"),
+            selectedLabels = listOf("reels"),
+            hasVerticalPager = true,
+            nodeCount = 90
+        )
+
+        val result = classifier.classify(signals)
+        assertEquals(ReelsClassification.NOT_REELS, result.classification)
+    }
+
     companion object {
         private const val INSTAGRAM = "com.instagram.android"
     }

@@ -125,6 +125,24 @@ class FocusGuardPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_USAGE_TRACKING_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_USAGE_TRACKING_ENABLED, value).apply()
 
+    // ── Reel Count ──
+
+    var isReelCountEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REEL_COUNT_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_REEL_COUNT_ENABLED, value).apply()
+
+    var isReelCountFloatingCounterEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REEL_COUNT_FLOATING_COUNTER, true)
+        set(value) = prefs.edit().putBoolean(KEY_REEL_COUNT_FLOATING_COUNTER, value).apply()
+
+    var reelCountDailyLimit: Int
+        get() = prefs.getInt(KEY_REEL_COUNT_DAILY_LIMIT, 30)
+        set(value) = prefs.edit().putInt(KEY_REEL_COUNT_DAILY_LIMIT, value).apply()
+
+    var isReelCountLimitEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REEL_COUNT_LIMIT_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_REEL_COUNT_LIMIT_ENABLED, value).apply()
+
     var totalFocusXp: Int
         get() = prefs.getInt(KEY_TOTAL_FOCUS_XP, 0)
         set(value) = prefs.edit().putInt(KEY_TOTAL_FOCUS_XP, value.coerceAtLeast(0)).apply()
@@ -978,6 +996,10 @@ class FocusGuardPrefs(context: Context) {
         private const val KEY_RECOVERY_PYQ_CORRECT = "recovery_pyq_correct"
         private const val KEY_RECOVERY_TASK_TITLE = "recovery_task_title"
         private const val KEY_RECOVERY_TASK_SUBJECT = "recovery_task_subject"
+        private const val KEY_REEL_COUNT_ENABLED = "reel_count_enabled"
+        private const val KEY_REEL_COUNT_FLOATING_COUNTER = "reel_count_floating_counter"
+        private const val KEY_REEL_COUNT_DAILY_LIMIT = "reel_count_daily_limit"
+        private const val KEY_REEL_COUNT_LIMIT_ENABLED = "reel_count_limit_enabled"
         private const val RECOVERY_PROMPT_MAX_AGE_MS = 6 * 60 * 60 * 1000L
         private const val PERMISSION_SETUP_WINDOW_MS = 2 * 60 * 1000L
 

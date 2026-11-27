@@ -46,6 +46,7 @@ import com.focusguard.app.antibypass.PermissionMonitor
 import com.focusguard.app.domain.settings.FocusSettings
 import com.focusguard.app.persistence.FocusGuardPrefs
 import com.focusguard.app.presentation.settings.SettingsViewModel
+import com.focusguard.app.reelcount.ui.ReelCountShieldCard
 import com.focusguard.app.ui.components.FocusGuardIconId
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.components.GradientButton
@@ -127,20 +128,31 @@ fun ShieldHubScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (guardArmed) "Blocking now" else "Ready",
-                                color = if (guardArmed) FrictionColors.Success else FrictionColors.Warning,
+                                text = when {
+                                    !accessibilityEnabled -> "Protection paused"
+                                    guardArmed -> "Protection active"
+                                    else -> "Ready"
+                                },
+                                color = when {
+                                    !accessibilityEnabled -> FrictionColors.Warning
+                                    guardArmed -> FrictionColors.Success
+                                    else -> FrictionColors.TextPrimary
+                                },
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (guardArmed) {
-                                    "Blocked apps and focused surfaces are active."
-                                } else {
-                                    "Accessibility blocks. Overlay adds the challenge screen."
+                                text = when {
+                                    !accessibilityEnabled ->
+                                        "Turn on Accessibility access to resume blocking."
+                                    guardArmed ->
+                                        "Blocked apps and focused surfaces are active."
+                                    else ->
+                                        "Start a focus session or set a schedule to activate blocking."
                                 },
                                 color = FrictionColors.TextSecondary,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp
+                                fontSize = 14.sp,
+                                lineHeight = 19.sp
                             )
                         }
                         Box(
@@ -195,6 +207,12 @@ fun ShieldHubScreen(
                         StatusChip("Usage", usageStatsEnabled)
                     }
                 }
+            }
+        }
+
+        item {
+            if (app.reelCountRepository.currentSettings().enabled) {
+                ReelCountShieldCard(app = app)
             }
         }
 
@@ -351,14 +369,8 @@ fun ShieldHubScreen(
                             "Exit Protection stays locked while the active Strict Mode session is running."
                         },
                         color = FrictionColors.TextMuted,
-                        fontSize = 11.sp,
-                        lineHeight = 16.sp
-                    )
-                    GradientButton(
-                        text = "Arm a focus session",
-                        leadingIcon = Icons.Rounded.Security,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onOpenFocus
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
                     )
                 }
             }

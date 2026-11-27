@@ -30,6 +30,8 @@ import com.focusguard.app.data.usage.UsageStatsReconciler
 import com.focusguard.app.friction.tasks.QuestionRepository
 import com.focusguard.app.persistence.FocusGuardDatabase
 import com.focusguard.app.persistence.FocusGuardPrefs
+import com.focusguard.app.reelcount.data.ReelCountRepository
+import com.focusguard.app.reelcount.integration.ReelCountCoordinator
 import com.focusguard.app.service.ServiceHealthWorker
 import com.focusguard.app.service.SmartNotificationWorker
 import java.util.concurrent.TimeUnit
@@ -140,6 +142,18 @@ class FocusGuardApp : Application() {
             context = this,
             pyqRepository = pyqRepository,
             behaviorRepository = behaviorRepository
+        )
+    }
+    val reelCountRepository: ReelCountRepository by lazy {
+        ReelCountRepository(
+            dao = database.reelCountDao(),
+            prefs = prefs
+        )
+    }
+    val reelCountCoordinator: ReelCountCoordinator by lazy {
+        ReelCountCoordinator(
+            repository = reelCountRepository,
+            prefs = prefs
         )
     }
 

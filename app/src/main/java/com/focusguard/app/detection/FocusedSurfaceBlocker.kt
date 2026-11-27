@@ -28,16 +28,35 @@ class FocusedSurfaceBlocker(
     private var lastBlockAtMs: Long = 0L
     private var hideJob: Job? = null
 
+    @Volatile
+    var isSurfaceBlockActive: Boolean = false
+        private set
+
     fun onSurfaceDetected(match: ContentSurfaceMatch) {
         val now = SystemClock.elapsedRealtime()
-        if (match.blockKey == lastBlockKey && (now - lastBlockAtMs) < BLOCK_COOLDOWN_MS) {
+        if (isSurfaceBlockActive || (match.blockKey == lastBlockKey && (now - lastBlockAtMs) < BLOCK_COOLDOWN_MS)) {
+            GuardDiagnostics.logEvent(
+                GuardDiagnostics.BLOCK_SUPPRESSED_DUPLICATE,
+                "surface=${match.surfaceId}"
+            )
+            return
+        }
+
+        val app = FocusGuardApp.instance
+        val reelCountBlocked = match.surfaceId == FocusGuardPrefs.SURFACE_INSTAGRAM_REELS &&
+            app.reelCountCoordinator.evaluateReelsBlockingPolicy().shouldBlock
+        if (!app.prefs.isGuardActiveNow() && !reelCountBlocked) {
+            isSurfaceBlockActive = false
             return
         }
 
         lastBlockKey = match.blockKey
         lastBlockAtMs = now
+        isSurfaceBlockActive = true
 
-        val app = FocusGuardApp.instance
+        if (match.surfaceId == FocusGuardPrefs.SURFACE_INSTAGRAM_REELS) {
+            app.reelCountCoordinator.onReelBlockedAttempt()
+        }
         val attemptNumber = app.prefs.incrementDailyAttempt()
         app.prefs.recordDistractionRecovery(
             sourceKey = match.blockKey,
@@ -46,26 +65,40 @@ class FocusedSurfaceBlocker(
         app.trackingManager.onBlockedSurface(match.blockKey, match.packageName)
         AppDetectorService.instance?.forceBack()
 
-        if (!app.prefs.isGuardActiveNow()) return
+        GuardDiagnostics.logEvent(
+            GuardDiagnostics.BLOCK_EXECUTED,
+            "surface=${match.surfaceId} pkg=${match.packageName}"
+        )
 
         if (!overlayManager.show()) {
-            AppDetectorService.instance?.forceHome()
-            logSurfaceAttempt(match, attemptNumber, wasSuccessful = false, durationMs = 0L)
+            hideJob?.cancel()
+            hideJob = scope.launch {
+                try {
+                    ensureExitedFromSurface(match)
+                    logSurfaceAttempt(match, attemptNumber, wasSuccessful = false, durationMs = 0L)
+                } finally {
+                    isSurfaceBlockActive = false
+                }
+            }
             return
         }
 
         hideJob?.cancel()
         hideJob = scope.launch {
-            val startedAtMs = SystemClock.elapsedRealtime()
-            val solved = showSurfacePyq(match)
-            ensureExitedFromSurface(match)
-            overlayManager.hide()
-            logSurfaceAttempt(
-                match = match,
-                attemptNumber = attemptNumber,
-                wasSuccessful = solved == true,
-                durationMs = (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0L)
-            )
+            try {
+                val startedAtMs = SystemClock.elapsedRealtime()
+                val solved = showSurfacePyq(match)
+                ensureExitedFromSurface(match)
+                overlayManager.hide()
+                logSurfaceAttempt(
+                    match = match,
+                    attemptNumber = attemptNumber,
+                    wasSuccessful = solved == true,
+                    durationMs = (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0L)
+                )
+            } finally {
+                isSurfaceBlockActive = false
+            }
         }
     }
 
@@ -217,6 +250,7 @@ class FocusedSurfaceBlocker(
     }
 
     fun destroy() {
+        isSurfaceBlockActive = false
         hideJob?.cancel()
         scope.cancel()
     }
