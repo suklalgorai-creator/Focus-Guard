@@ -1,15 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.FocusGuard" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">#FF1A1A2E</item>
+        <item name="colorPrimary">#FF7C3AED</item>
         <item name="colorOnPrimary">#FFFFFFFF</item>
-        <item name="colorPrimaryContainer">#FF16213E</item>
-        <item name="colorSecondary">#FFE94560</item>
+        <item name="colorPrimaryContainer">#FFE8EEF6</item>
+        <item name="colorSecondary">#FF0891B2</item>
         <item name="colorOnSecondary">#FFFFFFFF</item>
-        <item name="colorSurface">#FF0F0F23</item>
-        <item name="colorOnSurface">#FFECEFF4</item>
-        <item name="android:windowBackground">#FF0F0F23</item>
-        <item name="android:statusBarColor">#FF0F0F23</item>
-        <item name="android:navigationBarColor">#FF0F0F23</item>
+        <item name="colorSurface">#FFF4F7FB</item>
+        <item name="colorOnSurface">#FF0F172A</item>
+        <item name="android:windowBackground">#FFF4F7FB</item>
+        <item name="android:statusBarColor">#FFF4F7FB</item>
+        <item name="android:navigationBarColor">#FFF4F7FB</item>
+    </style>
+
+    <style name="Theme.FocusGuard.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFF4F7FB</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.FocusGuard</item>
     </style>
 </resources>

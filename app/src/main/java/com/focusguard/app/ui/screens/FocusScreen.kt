@@ -84,6 +84,7 @@ import com.focusguard.app.ui.components.GradientButton
 import com.focusguard.app.ui.components.SecondaryButton
 import com.focusguard.app.ui.components.StatItem
 import com.focusguard.app.ui.theme.FrictionColors
+import com.focusguard.app.ui.theme.GlassTokens
 import java.util.Calendar
 
 @Composable
@@ -245,6 +246,8 @@ private fun AccountabilityLockCard(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 20.dp,
+        isActive = lockActive,
+        accentColor = GlassTokens.Accents.AccountabilityLock,
         backgroundColor = if (lockActive) FrictionColors.WarningSoft else FrictionColors.GlassBackground
     ) {
         Column(
@@ -407,6 +410,7 @@ fun CircularTimer(
     GlassCard(
         modifier = modifier,
         cornerRadius = 32.dp,
+        accentColor = GlassTokens.Accents.FocusSession,
         backgroundColor = FrictionColors.GlassBackground,
         isActive = state.isActive
     ) {
@@ -472,6 +476,7 @@ fun CircularTimer(
                         color = FrictionColors.TextPrimary,
                         fontSize = 44.sp,
                         fontWeight = FontWeight.Bold,
+                        style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"),
                         letterSpacing = 0.sp
                     )
                     Text(

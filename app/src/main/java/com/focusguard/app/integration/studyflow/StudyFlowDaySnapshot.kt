@@ -54,36 +54,47 @@ data class StudyFlowDaySnapshot(
         const val ACTION_SYNC_STUDYFLOW_DAY = "com.focusguard.app.action.SYNC_STUDYFLOW_DAY"
         const val EXTRA_SNAPSHOT_JSON = "com.focusguard.app.extra.STUDYFLOW_SNAPSHOT_JSON"
 
+        private const val MAX_RAW_JSON_LENGTH = 32_768
+        private const val MAX_PENDING_ITEMS = 25
+        private const val MAX_FIELD_LENGTH = 160
+        private const val MIN_VALID_EPOCH_MS = 1_577_836_800_000L // 2020-01-01
+        private const val MAX_FUTURE_SKEW_MS = 300_000L
+        private val DATE_KEY_REGEX = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+
         fun fromIntent(intent: Intent): StudyFlowDaySnapshot? {
-            return fromJsonString(intent.getStringExtra(EXTRA_SNAPSHOT_JSON))
+            if (intent.action != ACTION_SYNC_STUDYFLOW_DAY) return null
+            val raw = intent.getStringExtra(EXTRA_SNAPSHOT_JSON) ?: return null
+            if (raw.length > MAX_RAW_JSON_LENGTH) return null
+            return fromJsonString(raw)
         }
 
         fun fromJsonString(raw: String?): StudyFlowDaySnapshot? {
-            if (raw.isNullOrBlank()) return null
+            if (raw.isNullOrBlank() || raw.length > MAX_RAW_JSON_LENGTH) return null
 
             return runCatching {
                 val root = JSONObject(raw)
-                val dateKey = root.optString("dateKey").trim()
-                if (dateKey.isEmpty()) {
-                    throw IllegalArgumentException("dateKey missing")
+                val dateKey = root.optString("dateKey").sanitize(10)
+                if (!DATE_KEY_REGEX.matches(dateKey)) {
+                    throw IllegalArgumentException("dateKey invalid")
                 }
 
                 val pendingItems = buildList {
                     val array = root.optJSONArray("pendingItems") ?: JSONArray()
-                    for (index in 0 until array.length()) {
+                    val count = minOf(array.length(), MAX_PENDING_ITEMS)
+                    for (index in 0 until count) {
                         val item = array.optJSONObject(index) ?: continue
-                        val title = item.optString("title").trim()
+                        val title = item.optString("title").sanitize(MAX_FIELD_LENGTH)
                         if (title.isEmpty()) continue
 
                         add(
                             StudyFlowPendingItem(
-                                id = item.optString("id").ifBlank { "item_$index" },
+                                id = item.optString("id").sanitize(64).ifBlank { "item_$index" },
                                 title = title,
-                                subject = item.optNullableString("subject"),
-                                detail = item.optNullableString("detail"),
-                                kind = item.optString("kind").ifBlank { "task" },
+                                subject = item.optNullableString("subject", 64),
+                                detail = item.optNullableString("detail", MAX_FIELD_LENGTH),
+                                kind = item.optString("kind").sanitize(32).ifBlank { "task" },
                                 etaMinutes = item.optNullableInt("etaMinutes"),
-                                priority = item.optNullableString("priority")
+                                priority = item.optNullableString("priority", 32)
                             )
                         )
                     }
@@ -91,24 +102,35 @@ data class StudyFlowDaySnapshot(
 
                 StudyFlowDaySnapshot(
                     dateKey = dateKey,
-                    examId = root.optNullableString("examId"),
-                    headline = root.optNullableString("headline"),
-                    focusPrompt = root.optNullableString("focusPrompt"),
+                    examId = root.optNullableString("examId", 32),
+                    headline = root.optNullableString("headline", MAX_FIELD_LENGTH),
+                    focusPrompt = root.optNullableString("focusPrompt", MAX_FIELD_LENGTH),
                     pendingItems = pendingItems,
-                    syncedAtEpochMs = root.optLong("syncedAtEpochMs").takeIf { it > 0L }
-                        ?: System.currentTimeMillis()
+                    syncedAtEpochMs = run {
+                        val now = System.currentTimeMillis()
+                        root.optLong("syncedAtEpochMs")
+                            .takeIf { it in MIN_VALID_EPOCH_MS..(now + MAX_FUTURE_SKEW_MS) }
+                            ?: now
+                    }
                 )
             }.getOrNull()
         }
 
-        private fun JSONObject.optNullableString(key: String): String? {
-            val value = optString(key).trim()
+        private fun String.sanitize(maxLen: Int): String {
+            return replace(Regex("[\\p{Cntrl}&&[^\n\t]]"), "")
+                .trim()
+                .take(maxLen)
+        }
+
+        private fun JSONObject.optNullableString(key: String, maxLen: Int = MAX_FIELD_LENGTH): String? {
+            if (!has(key) || isNull(key)) return null
+            val value = optString(key).sanitize(maxLen)
             return value.ifEmpty { null }
         }
 
         private fun JSONObject.optNullableInt(key: String): Int? {
             if (!has(key) || isNull(key)) return null
-            return optInt(key).takeIf { it > 0 }
+            return optInt(key).takeIf { it in 1..1440 }
         }
     }
 }

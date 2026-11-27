@@ -7,6 +7,8 @@ import com.focusguard.app.data.usage.UsageRepository
 import com.focusguard.app.data.usage.UsageStatsReconciler
 import com.focusguard.app.domain.AppUsageData
 import com.focusguard.app.domain.usage.UsageAnalyticsSummary
+import com.focusguard.app.persistence.AttemptDao
+import com.focusguard.app.persistence.AttemptEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,12 +20,14 @@ data class UsageStatsUiState(
     val isLoading: Boolean = true,
     val today: UsageAnalyticsSummary = UsageAnalyticsSummary(dateKey = ""),
     val weeklyUsage: Map<String, List<AppUsageData>> = emptyMap(),
+    val recentBlocks: List<AttemptEntity> = emptyList(),
     val errorMessage: String? = null
 )
 
 class UsageStatsViewModel(
     private val usageRepository: UsageRepository,
-    private val usageStatsReconciler: UsageStatsReconciler
+    private val usageStatsReconciler: UsageStatsReconciler,
+    private val attemptDao: AttemptDao? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(UsageStatsUiState())
@@ -37,14 +41,17 @@ class UsageStatsViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, errorMessage = null)
             try {
-                val snapshot = withContext(Dispatchers.IO) {
+                val (snapshot, recentBlocks) = withContext(Dispatchers.IO) {
                     usageStatsReconciler.reconcileToday(force = force)
-                    usageRepository.getUsageSnapshot(forceRefresh = force)
+                    val usage = usageRepository.getUsageSnapshot(forceRefresh = force)
+                    val blocks = attemptDao?.getRecentAttempts(20).orEmpty()
+                    usage to blocks
                 }
                 _state.value = UsageStatsUiState(
                     isLoading = false,
                     today = snapshot.today,
-                    weeklyUsage = snapshot.weeklyUsage
+                    weeklyUsage = snapshot.weeklyUsage,
+                    recentBlocks = recentBlocks
                 )
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
@@ -58,13 +65,15 @@ class UsageStatsViewModel(
     companion object {
         fun factory(
             usageRepository: UsageRepository,
-            usageStatsReconciler: UsageStatsReconciler
+            usageStatsReconciler: UsageStatsReconciler,
+            attemptDao: AttemptDao? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return UsageStatsViewModel(
                     usageRepository = usageRepository,
-                    usageStatsReconciler = usageStatsReconciler
+                    usageStatsReconciler = usageStatsReconciler,
+                    attemptDao = attemptDao
                 ) as T
             }
         }

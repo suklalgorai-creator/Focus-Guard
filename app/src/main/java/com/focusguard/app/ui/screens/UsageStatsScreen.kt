@@ -23,11 +23,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.focusguard.app.domain.AppUsageData
 import com.focusguard.app.FocusGuardApp
+import com.focusguard.app.persistence.AttemptEntity
+import com.focusguard.app.persistence.FocusGuardPrefs
 import com.focusguard.app.presentation.analytics.AnalyticsViewModel
 import com.focusguard.app.presentation.usage.UsageStatsViewModel
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.components.StableLinearProgress
 import com.focusguard.app.ui.theme.FrictionColors
+import com.focusguard.app.ui.theme.GlassTokens
 
 /**
  * Usage Statistics Screen — Modern Redesign.
@@ -110,6 +113,7 @@ fun UsageStatsScreen(
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     cornerRadius = 24.dp,
+                    accentColor = GlassTokens.Accents.ProgressStats,
                     backgroundColor = FrictionColors.GlassBackground
                 ) {
                     Column(
@@ -230,7 +234,7 @@ fun UsageStatsScreen(
                                 modifier = Modifier.padding(top = 4.dp, start = 4.dp)
                             )
                         }
-                        items(blacklistedToday) { app ->
+                        items(blacklistedToday, key = { "blk_${it.packageName}" }) { app ->
                             UsageBarItem(
                                 app = app,
                                 maxMs = dailyStats.maxOfOrNull { it.usageTimeMs } ?: 1L,
@@ -248,12 +252,27 @@ fun UsageStatsScreen(
                             modifier = Modifier.padding(top = 4.dp, start = 4.dp)
                         )
                     }
-                    items(dailyStats.filter { !it.isBlacklisted }.take(20)) { app ->
+                    items(dailyStats.filter { !it.isBlacklisted }.take(20), key = { "app_${it.packageName}" }) { app ->
                         UsageBarItem(
                             app = app,
                             maxMs = dailyStats.maxOfOrNull { it.usageTimeMs } ?: 1L,
                             isBlacklisted = false
                         )
+                    }
+
+                    if (usageState.recentBlocks.isNotEmpty()) {
+                        item {
+                            Text(
+                                "Recent Blocks",
+                                color = FrictionColors.TextSecondary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(top = 8.dp, start = 4.dp)
+                            )
+                        }
+                        items(usageState.recentBlocks.take(15), key = { "hist_${it.id}" }) { attempt ->
+                            RecentBlockHistoryItem(attempt = attempt)
+                        }
                     }
                 }
                 1 -> {
@@ -272,7 +291,7 @@ fun UsageStatsScreen(
                         )
                     }
 
-                    items(sortedDays) { (dayKey, apps) ->
+                    items(sortedDays, key = { "day_${it.key}" }) { (dayKey, apps) ->
                         val dayTotal = apps.sumOf { it.usageTimeMs }
                         val blacklistedDayTotal = apps.filter { it.isBlacklisted }.sumOf { it.usageTimeMs }
                         WeekDayBar(dayKey, dayTotal, blacklistedDayTotal, maxDayMs)
@@ -463,4 +482,55 @@ private fun usageProgressFraction(
     return (valueMs.toDouble() / maxMs.toDouble())
         .toFloat()
         .coerceIn(minFraction, 1f)
+}
+
+@Composable
+private fun RecentBlockHistoryItem(attempt: AttemptEntity) {
+    val label = FocusGuardPrefs.recoveryTitleForSource(attempt.blockedPackage)
+    val timeText = remember(attempt.timestamp) {
+        java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(attempt.timestamp))
+    }
+    val outcomeText = when {
+        attempt.wasSuccessful -> "PYQ solved"
+        attempt.wasAbandoned -> "Blocked / exited"
+        else -> "Intercepted"
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        cornerRadius = 14.dp,
+        accentColor = GlassTokens.Accents.AppBlocking,
+        backgroundColor = FrictionColors.GlassBackground
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = FrictionColors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "$timeText • $outcomeText",
+                    color = FrictionColors.TextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                text = "#${attempt.attemptNumber}",
+                color = FrictionColors.Accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
 }

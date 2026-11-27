@@ -50,6 +50,7 @@ import com.focusguard.app.domain.auth.AuthUiState
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.components.GradientButton
 import com.focusguard.app.ui.theme.FrictionColors
+import com.focusguard.app.ui.theme.GlassTokens
 
 @Composable
 fun LoginScreen(
@@ -102,6 +103,7 @@ fun LoginScreen(
                 .align(Alignment.Center)
                 .fillMaxWidth(),
             cornerRadius = 28.dp,
+            accentColor = GlassTokens.Accents.StudyFlow,
             backgroundColor = FrictionColors.GlassBackground
         ) {
             Column(
@@ -129,7 +131,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "Friction Guard",
+                    text = "Focus Guard",
                     color = FrictionColors.TextPrimary,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,

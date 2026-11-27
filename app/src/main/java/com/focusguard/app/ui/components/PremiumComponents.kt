@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,24 +37,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.focusguard.app.ui.theme.FrictionColors
+import com.focusguard.app.ui.theme.GlassTokens
 
 data class PremiumNavItem(
     val route: String,
     val label: String,
     val icon: ImageVector,
-    val isPrimaryCta: Boolean = false
+    val isPrimaryCta: Boolean = false,
+    val iconId: FocusGuardIconId? = null
 )
 
 @Composable
@@ -61,31 +66,36 @@ fun GradientButton(
     text: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    isLoading: Boolean = false,
+    accentColor: Color = GlassTokens.Accents.FocusSession,
     leadingIcon: ImageVector? = null,
     height: Dp = 54.dp,
-    cornerRadius: Dp = 16.dp,
+    cornerRadius: Dp = GlassTokens.Radius.md,
     onClick: () -> Unit
 ) {
+    val interactive = enabled && !isLoading
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
+        targetValue = if (pressed && interactive) 0.96f else 1f,
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
         label = "gradient-button-scale"
     )
     val shape = RoundedCornerShape(cornerRadius)
     val shadowColor = if (FrictionColors.useDarkPalette) {
-        FrictionColors.Accent.copy(alpha = 0.20f)
+        accentColor.copy(alpha = 0.24f)
     } else {
-        Color.Black.copy(alpha = 0.10f)
+        accentColor.copy(alpha = 0.16f)
     }
+    val gradientColors = listOf(accentColor, accentColor.copy(alpha = 0.82f))
 
     Box(
         modifier = modifier
             .height(height)
+            .alpha(if (enabled) 1f else 0.55f)
             .scale(scale)
             .shadow(
-                elevation = if (enabled) 10.dp else 0.dp,
+                elevation = if (interactive) 10.dp else 0.dp,
                 shape = shape,
                 clip = false,
                 ambientColor = shadowColor,
@@ -94,13 +104,18 @@ fun GradientButton(
             .clip(shape)
             .background(
                 if (enabled) {
-                    Brush.linearGradient(FrictionColors.AccentGradient)
+                    Brush.linearGradient(gradientColors)
                 } else {
                     Brush.linearGradient(listOf(FrictionColors.SurfaceElevated, FrictionColors.SurfaceElevated))
                 }
             )
+            .border(
+                width = GlassTokens.Border.normal,
+                color = if (enabled) Color.White.copy(alpha = 0.18f) else FrictionColors.GlassBorder,
+                shape = shape
+            )
             .clickable(
-                enabled = enabled,
+                enabled = interactive,
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
                 onClick = onClick
@@ -112,7 +127,14 @@ fun GradientButton(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (leadingIcon != null) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            } else if (leadingIcon != null) {
                 Icon(
                     imageVector = leadingIcon,
                     contentDescription = null,
@@ -137,25 +159,34 @@ fun GradientButton(
 fun SecondaryButton(
     text: String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    accentColor: Color = FrictionColors.Accent,
     leadingIcon: ImageVector? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
+        targetValue = if (pressed && enabled) 0.97f else 1f,
         animationSpec = spring(dampingRatio = 0.76f, stiffness = 480f),
         label = "secondary-button-scale"
     )
+    val shape = RoundedCornerShape(GlassTokens.Radius.md)
 
     Row(
         modifier = modifier
             .height(52.dp)
+            .alpha(if (enabled) 1f else 0.55f)
             .scale(scale)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(shape)
             .background(FrictionColors.GlassBackground)
-            .border(0.8.dp, FrictionColors.GlassBorder, RoundedCornerShape(14.dp))
+            .border(
+                GlassTokens.Border.normal,
+                accentColor.copy(alpha = if (FrictionColors.useDarkPalette) 0.30f else 0.24f),
+                shape
+            )
             .clickable(
+                enabled = enabled,
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
                 onClick = onClick
@@ -168,16 +199,18 @@ fun SecondaryButton(
             Icon(
                 imageVector = leadingIcon,
                 contentDescription = null,
-                tint = FrictionColors.Accent,
+                tint = if (enabled) accentColor else FrictionColors.TextMuted,
                 modifier = Modifier.size(19.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
         }
         Text(
             text = text,
-            color = FrictionColors.TextPrimary,
+            color = if (enabled) FrictionColors.TextPrimary else FrictionColors.TextMuted,
             fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -306,7 +339,11 @@ fun StatItem(
     modifier: Modifier = Modifier,
     accent: Color = FrictionColors.Accent
 ) {
-    SurfaceCard(modifier = modifier, cornerRadius = 14.dp) {
+    GlassCard(
+        modifier = modifier,
+        cornerRadius = GlassTokens.Radius.md,
+        accentColor = accent
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -317,7 +354,7 @@ fun StatItem(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(accent.copy(alpha = 0.13f)),
+                    .background(accent.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
@@ -329,6 +366,7 @@ fun StatItem(
                     color = FrictionColors.TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
+                    style = TextStyle(fontFeatureSettings = "tnum"),
                     maxLines = 1
                 )
                 Text(
@@ -424,15 +462,16 @@ private fun PremiumNavItemView(
     modifier: Modifier = Modifier
 ) {
     val isPrimary = item.isPrimaryCta
+    val activeColor = item.iconId?.accentColor ?: FrictionColors.Accent
     val background by animateColorAsState(
-        targetValue = if (!isPrimary && selected) FrictionColors.AccentSoft else Color.Transparent,
+        targetValue = if (!isPrimary && selected) activeColor.copy(alpha = 0.16f) else Color.Transparent,
         animationSpec = tween(220),
         label = "nav-bg"
     )
     val iconColor by animateColorAsState(
         targetValue = when {
             isPrimary -> Color.White
-            selected -> FrictionColors.Accent
+            selected -> activeColor
             else -> FrictionColors.TextMuted
         },
         animationSpec = tween(220),
@@ -486,12 +525,23 @@ private fun PremiumNavItemView(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = item.label,
-                tint = iconColor,
-                modifier = Modifier.size(if (isPrimary) 24.dp else 21.dp)
-            )
+            if (item.iconId != null) {
+                FocusGuardIcon(
+                    iconId = item.iconId,
+                    contentDescription = item.label,
+                    size = if (isPrimary) 24.dp else 21.dp,
+                    showGlassTile = false,
+                    selected = selected || isPrimary,
+                    tintOverride = iconColor
+                )
+            } else {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = item.label,
+                    tint = iconColor,
+                    modifier = Modifier.size(if (isPrimary) 24.dp else 21.dp)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(if (isPrimary) 4.dp else 2.dp))
         Text(
@@ -534,24 +584,17 @@ fun PremiumDrawerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(Brush.linearGradient(FrictionColors.AccentGradient)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Security,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                FocusGuardIcon(
+                    iconId = FocusGuardIconId.BrandShieldBrain,
+                    contentDescription = "Focus Guard",
+                    tileSize = 46.dp,
+                    showGlassTile = true,
+                    selected = true
+                )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "Friction Guard",
+                        text = "Focus Guard",
                         color = FrictionColors.TextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold

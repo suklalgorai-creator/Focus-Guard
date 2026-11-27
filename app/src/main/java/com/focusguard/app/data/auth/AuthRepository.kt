@@ -257,9 +257,15 @@ class AuthRepository(
 
         val session = sessionStore.loadSession()
         if (session == null) {
+            val recoveryError = if (sessionStore.isSecureStorageUnavailable) {
+                "Secure session storage was reset. Please sign in again."
+            } else {
+                null
+            }
             _state.value = AuthUiState(
                 isInitializing = false,
                 hasSkippedLogin = skipped,
+                errorMessage = recoveryError,
                 isConfigured = true
             )
             return
@@ -276,13 +282,15 @@ class AuthRepository(
             return
         }
 
-        runCatching { fetchAndApplyRemoteSettings(activeSession) }
         _state.value = AuthUiState(
             isInitializing = false,
             user = activeSession.user,
             hasSkippedLogin = false,
             isConfigured = true
         )
+        repositoryScope.launch {
+            runCatching { fetchAndApplyRemoteSettings(activeSession) }
+        }
     }
 
     private suspend fun getValidSessionOrNull(
@@ -320,7 +328,19 @@ class AuthRepository(
     }
 
     private fun applyRemoteSettings(remote: RemoteUserSettings) {
-        remote.blockedApps?.let { prefs.blacklistedApps = it }
+        if (prefs.isAccountabilityLockActive || prefs.isStrictBlockActive() || prefs.isGuardActiveNow()) {
+            // Do not allow remote settings sync to weaken an active local lock or schedule.
+            return
+        }
+
+        remote.blockedApps?.let { apps ->
+            val sanitizedApps = apps.asSequence()
+                .map { it.trim() }
+                .filter { it.matches(VALID_PACKAGE_NAME_REGEX) && it != SELF_PACKAGE_NAME }
+                .take(MAX_REMOTE_BLOCKED_APPS)
+                .toSet()
+            prefs.blacklistedApps = sanitizedApps
+        }
         remote.focusSchedule?.let { schedule ->
             val days = schedule.days.filter { it in 1..7 }.toSet().ifEmpty {
                 setOf(2, 3, 4, 5, 6, 7)
@@ -353,5 +373,11 @@ class AuthRepository(
             is IllegalStateException -> exception.message ?: "Something went wrong while opening auth. Please try again."
             else -> exception.message ?: "Authentication failed. Please try again."
         }
+    }
+
+    companion object {
+        private const val SELF_PACKAGE_NAME = "com.focusguard.app"
+        private const val MAX_REMOTE_BLOCKED_APPS = 200
+        private val VALID_PACKAGE_NAME_REGEX = Regex("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_]+)+$")
     }
 }

@@ -58,6 +58,7 @@ import com.focusguard.app.friction.tasks.QuestionRepository
 import com.focusguard.app.persistence.FocusGuardPrefs
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.theme.FrictionColors
+import com.focusguard.app.ui.theme.GlassTokens
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -408,6 +409,7 @@ private fun BlacklistOverviewCard(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 22.dp,
+        accentColor = GlassTokens.Accents.AppBlocking,
         backgroundColor = FrictionColors.GlassBackground
     ) {
         Column(
@@ -437,77 +439,6 @@ private fun BlacklistOverviewCard(
                 color = FrictionColors.TextSecondary,
                 fontSize = 13.sp,
                 lineHeight = 18.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun BlockModeGuideCard() {
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 18.dp,
-        backgroundColor = FrictionColors.GlassBackground
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            BlockModeRow(
-                title = "Surface-only",
-                subtitle = "Instagram opens, Reels tab is blocked.",
-                accentColor = FrictionColors.Success
-            )
-            Divider(color = FrictionColors.CardBorder)
-            BlockModeRow(
-                title = "Full app",
-                subtitle = "The selected app is blocked on launch.",
-                accentColor = FrictionColors.Accent
-            )
-            Divider(color = FrictionColors.CardBorder)
-            BlockModeRow(
-                title = "Daily limit",
-                subtitle = "Time budgets can plug in here later.",
-                accentColor = FrictionColors.Warning
-            )
-        }
-    }
-}
-
-@Composable
-private fun BlockModeRow(
-    title: String,
-    subtitle: String,
-    accentColor: Color
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 6.dp, height = 34.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(accentColor)
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = title,
-                color = FrictionColors.TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = subtitle,
-                color = FrictionColors.TextSecondary,
-                fontSize = 12.sp,
-                lineHeight = 16.sp
             )
         }
     }
@@ -547,6 +478,8 @@ private fun FocusedSurfaceToggleItem(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 18.dp,
+        isActive = isEnabled,
+        accentColor = GlassTokens.Accents.AppBlocking,
         backgroundColor = if (isEnabled) FrictionColors.AccentMuted else FrictionColors.GlassBackground
     ) {
         Row(
@@ -620,6 +553,7 @@ private fun StudyYoutubeModeCard(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 22.dp,
+        accentColor = GlassTokens.Accents.AppBlocking,
         backgroundColor = FrictionColors.GlassBackground
     ) {
         Column(

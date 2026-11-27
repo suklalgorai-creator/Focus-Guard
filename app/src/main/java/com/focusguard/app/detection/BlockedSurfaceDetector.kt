@@ -19,7 +19,8 @@ data class ContentSurfaceMatch(
 class BlockedSurfaceDetector(
     private val prefs: FocusGuardPrefs,
     private val reelsClassifier: InstagramReelsClassifier = InstagramReelsClassifier(),
-    private val reelsStabilizer: ReelsStateStabilizer = ReelsStateStabilizer()
+    private val reelsStabilizer: ReelsStateStabilizer = ReelsStateStabilizer(),
+    private val youtubeClassifier: YouTubeShortsClassifier = YouTubeShortsClassifier()
 ) {
 
     fun onForegroundPackageChanged(packageName: String) {
@@ -54,15 +55,23 @@ class BlockedSurfaceDetector(
         match: ContentSurfaceMatch,
         rootNode: AccessibilityNodeInfo?
     ): Boolean {
-        if (match.surfaceId != FocusGuardPrefs.SURFACE_INSTAGRAM_REELS) return false
         val rootPackage = rootNode?.packageName?.toString() ?: return false
         if (rootPackage != match.packageName) return false
 
         val snapshot = NodeSnapshot.from(event = null, rootNode = rootNode)
-        val signals = snapshot.toReelsSignals(packageName = rootPackage, event = null)
-        val result = reelsClassifier.classify(signals)
-        return result.classification == ReelsClassification.REELS_CONFIRMED ||
-            result.classification == ReelsClassification.REELS_LIKELY
+        return when (match.surfaceId) {
+            FocusGuardPrefs.SURFACE_INSTAGRAM_REELS -> {
+                val signals = snapshot.toReelsSignals(packageName = rootPackage, event = null)
+                val result = reelsClassifier.classify(signals)
+                result.classification == ReelsClassification.REELS_CONFIRMED ||
+                    result.classification == ReelsClassification.REELS_LIKELY
+            }
+            FocusGuardPrefs.SURFACE_YOUTUBE_SHORTS -> {
+                val result = youtubeClassifier.classify(snapshot.toYouTubeSignals(prefs))
+                result.classification == YouTubeShortsClassification.SHORTS_CONFIRMED
+            }
+            else -> false
+        }
     }
 
     private fun detectInstagramReels(
@@ -137,34 +146,12 @@ class BlockedSurfaceDetector(
         }
 
         val snapshot = NodeSnapshot.from(event, rootNode)
-        val hasShortsViewId = snapshot.viewIds.any { id ->
-            id.contains("shorts") || id.contains("reel")
-        }
-        val hasShortsPhrase = snapshot.texts.any { text ->
-            YOUTUBE_SHORTS_PHRASES.any(text::contains) || text == "shorts"
-        }
-        val hasChannelHandle = snapshot.texts.any { text ->
-            text.startsWith("@") && text.length > 2
-        }
-        val hasViewerHints = snapshot.texts.any { text ->
-            text.contains("subscribe") ||
-                text.contains("subscribers") ||
-                text.contains("comments") ||
-                text.contains("likes") ||
-                text.contains("original sound") ||
-                text.contains("sound")
-        }
-
-        if (!hasShortsViewId && !(hasShortsPhrase && (hasChannelHandle || hasViewerHints))) {
+        val result = youtubeClassifier.classify(snapshot.toYouTubeSignals(prefs))
+        if (result.classification != YouTubeShortsClassification.SHORTS_CONFIRMED) {
             return null
         }
 
-        val productiveMatch = matchConfiguredChannel(snapshot.texts, prefs.youtubeProductiveChannels)
-        if (productiveMatch != null) {
-            return null
-        }
-
-        val distractingMatch = matchConfiguredChannel(snapshot.texts, prefs.youtubeDistractingChannels)
+        val distractingMatch = result.matchedChannel
         val message = if (distractingMatch != null) {
             "$distractingMatch is marked as distracting. Shorts stay blocked during focus hours."
         } else {
@@ -178,33 +165,6 @@ class BlockedSurfaceDetector(
             title = "YouTube Shorts",
             message = message
         )
-    }
-
-    private fun matchConfiguredChannel(
-        observedTexts: List<String>,
-        configuredChannels: Set<String>
-    ): String? {
-        if (configuredChannels.isEmpty()) return null
-
-        val normalizedTexts = observedTexts
-            .map(::normalizeChannelToken)
-            .filter { it.length >= 3 }
-
-        return configuredChannels.firstOrNull { rule ->
-            val normalizedRule = normalizeChannelToken(rule)
-            normalizedRule.length >= 3 && normalizedTexts.any { text ->
-                text == normalizedRule ||
-                    text.contains(normalizedRule) ||
-                    normalizedRule.contains(text)
-            }
-        }
-    }
-
-    private fun normalizeChannelToken(value: String): String {
-        return value.lowercase()
-            .replace(Regex("[^a-z0-9@ ]"), " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
     }
 
     private data class NodeSnapshot(
@@ -233,6 +193,18 @@ class BlockedSurfaceDetector(
                 nodeCount = nodeCount,
                 wasTruncated = wasTruncated,
                 hasRootNode = hasRootNode
+            )
+        }
+
+        fun toYouTubeSignals(prefs: FocusGuardPrefs): YouTubeHierarchySignals {
+            return YouTubeHierarchySignals(
+                viewIds = viewIds,
+                texts = texts,
+                selectedLabels = selectedTexts,
+                hasVerticalPager = hasVerticalPager,
+                productiveChannels = prefs.youtubeProductiveChannels,
+                distractingChannels = prefs.youtubeDistractingChannels,
+                nodeCount = nodeCount
             )
         }
 
@@ -365,13 +337,6 @@ class BlockedSurfaceDetector(
             "share_button",
             "clips_audio",
             "clips_remix"
-        )
-
-        private val YOUTUBE_SHORTS_PHRASES = listOf(
-            "shorts",
-            "subscribe",
-            "remix",
-            "original sound"
         )
     }
 }

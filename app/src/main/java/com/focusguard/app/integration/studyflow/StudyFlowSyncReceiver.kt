@@ -18,6 +18,18 @@ class StudyFlowSyncReceiver : BroadcastReceiver() {
         }
 
         val prefs = FocusGuardPrefs(context)
+        val todayKey = prefs.getTodayKey()
+        if (!snapshot.isFreshFor(todayKey)) {
+            Log.w(TAG, "StudyFlow sync ignored: stale dateKey=${snapshot.dateKey} (today=$todayKey)")
+            return
+        }
+
+        val existing = prefs.getStudyFlowDaySnapshot()
+        if (existing != null && snapshot.syncedAtEpochMs <= existing.syncedAtEpochMs) {
+            Log.d(TAG, "StudyFlow sync ignored: duplicate or older snapshot")
+            return
+        }
+
         prefs.storeStudyFlowDaySnapshot(snapshot)
 
         Log.d(

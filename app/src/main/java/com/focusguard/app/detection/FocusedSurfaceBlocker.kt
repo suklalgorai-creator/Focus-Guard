@@ -8,6 +8,7 @@ import com.focusguard.app.friction.tasks.ExamQuestionTask
 import com.focusguard.app.friction.tasks.OverlayPyqAttemptLogger
 import com.focusguard.app.integration.studyflow.StudyFlowOverlayRenderer
 import com.focusguard.app.overlay.OverlayManager
+import com.focusguard.app.persistence.AttemptEntity
 import kotlin.random.Random
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -36,24 +37,59 @@ class FocusedSurfaceBlocker(
         lastBlockKey = match.blockKey
         lastBlockAtMs = now
 
-        FocusGuardApp.instance.prefs.recordDistractionRecovery(
+        val app = FocusGuardApp.instance
+        val attemptNumber = app.prefs.incrementDailyAttempt()
+        app.prefs.recordDistractionRecovery(
             sourceKey = match.blockKey,
             sourceTitle = match.title
         )
+        app.trackingManager.onBlockedSurface(match.blockKey, match.packageName)
         AppDetectorService.instance?.forceBack()
 
-        if (!FocusGuardApp.instance.prefs.isGuardActiveNow()) return
+        if (!app.prefs.isGuardActiveNow()) return
 
         if (!overlayManager.show()) {
             AppDetectorService.instance?.forceHome()
+            logSurfaceAttempt(match, attemptNumber, wasSuccessful = false, durationMs = 0L)
             return
         }
 
         hideJob?.cancel()
         hideJob = scope.launch {
-            showSurfacePyq(match)
+            val startedAtMs = SystemClock.elapsedRealtime()
+            val solved = showSurfacePyq(match)
             ensureExitedFromSurface(match)
             overlayManager.hide()
+            logSurfaceAttempt(
+                match = match,
+                attemptNumber = attemptNumber,
+                wasSuccessful = solved == true,
+                durationMs = (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0L)
+            )
+        }
+    }
+
+    private fun logSurfaceAttempt(
+        match: ContentSurfaceMatch,
+        attemptNumber: Int,
+        wasSuccessful: Boolean,
+        durationMs: Long
+    ) {
+        val prefs = FocusGuardApp.instance.prefs
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                FocusGuardApp.instance.database.attemptDao().insert(
+                    AttemptEntity(
+                        blockedPackage = match.blockKey,
+                        attemptNumber = attemptNumber,
+                        escalationLevel = prefs.currentEscalationLevel,
+                        wasSuccessful = wasSuccessful,
+                        durationMs = durationMs,
+                        wasAbandoned = !wasSuccessful,
+                        dateKey = prefs.getTodayKey()
+                    )
+                )
+            }
         }
     }
 
@@ -88,7 +124,7 @@ class FocusedSurfaceBlocker(
         delay(EXIT_RETRY_DELAY_MS)
     }
 
-    private suspend fun showSurfacePyq(match: ContentSurfaceMatch) {
+    private suspend fun showSurfacePyq(match: ContentSurfaceMatch): Boolean? {
         val challenge = ExamQuestionTask(difficulty = Random.nextInt(1, 4)).generate()
         val answered = CompletableDeferred<Boolean>()
 
@@ -177,6 +213,7 @@ class FocusedSurfaceBlocker(
                 delay(1400)
             }
         }
+        return correct
     }
 
     fun destroy() {

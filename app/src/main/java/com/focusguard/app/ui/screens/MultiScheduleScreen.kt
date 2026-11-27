@@ -54,6 +54,7 @@ import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.persistence.StudyBlockSchedule
 import com.focusguard.app.ui.components.GlassCard
 import com.focusguard.app.ui.theme.FrictionColors
+import com.focusguard.app.ui.theme.GlassTokens
 import java.util.Calendar
 import java.util.UUID
 
@@ -106,6 +107,7 @@ fun MultiScheduleScreen(onBack: () -> Unit) {
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     cornerRadius = 24.dp,
+                    accentColor = GlassTokens.Accents.Schedules,
                     backgroundColor = FrictionColors.GlassBackground
                 ) {
                     Column(
@@ -260,6 +262,7 @@ private fun StudyBlockCard(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 20.dp,
+        accentColor = GlassTokens.Accents.Schedules,
         backgroundColor = FrictionColors.GlassBackground,
         isActive = isActive
     ) {

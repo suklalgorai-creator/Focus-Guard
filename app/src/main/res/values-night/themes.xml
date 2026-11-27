@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FocusGuard" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#FFA78BFA</item>
+        <item name="colorOnPrimary">#FFFFFFFF</item>
+        <item name="colorPrimaryContainer">#FF1A2333</item>
+        <item name="colorSecondary">#FF22D3EE</item>
+        <item name="colorOnSecondary">#FFFFFFFF</item>
+        <item name="colorSurface">#FF0B0F17</item>
+        <item name="colorOnSurface">#FFF8FAFC</item>
+        <item name="android:windowBackground">#FF0B0F17</item>
+        <item name="android:statusBarColor">#FF0B0F17</item>
+        <item name="android:navigationBarColor">#FF0B0F17</item>
+    </style>
+
+    <style name="Theme.FocusGuard.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FF0B0F17</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.FocusGuard</item>
+    </style>
+</resources>

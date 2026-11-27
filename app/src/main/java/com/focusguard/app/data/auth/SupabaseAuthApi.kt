@@ -305,16 +305,17 @@ class SupabaseAuthApi(
         if (response.isBlank()) return "Supabase request failed."
         return runCatching {
             val json = JSONObject(response)
-            json.optNullableString("msg")
+            (json.optNullableString("msg")
                 ?: json.optNullableString("message")
                 ?: json.optNullableString("error_description")
-                ?: response
-        }.getOrElse { response }
+                ?: "Supabase request failed.")
+                .take(200)
+        }.getOrElse { "Supabase request failed." }
     }
 
     private fun ensureConfigured() {
-        if (!config.isConfigured) {
-            throw SupabaseException(0, "Supabase auth is not configured for this build.")
+        if (!config.isConfigured || !config.isHttpsSupabaseUrl) {
+            throw SupabaseException(0, "Supabase auth requires a valid HTTPS configuration.")
         }
     }
 }

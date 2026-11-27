@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.SystemClock
 import com.focusguard.app.integration.studyflow.StudyFlowDaySnapshot
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -54,9 +57,18 @@ class FocusGuardPrefs(context: Context) {
      * permission needed to show a real block. This prevents a restored or
      * half-configured install from looking armed while it cannot block.
      */
+    private val _protectionArmedFlow by lazy {
+        MutableStateFlow(prefs.getBoolean(KEY_PROTECTION_ARMED, false))
+    }
+    val protectionArmedFlow: StateFlow<Boolean>
+        get() = _protectionArmedFlow.asStateFlow()
+
     var isProtectionArmed: Boolean
         get() = prefs.getBoolean(KEY_PROTECTION_ARMED, false)
-        set(value) = prefs.edit().putBoolean(KEY_PROTECTION_ARMED, value).apply()
+        set(value) {
+            prefs.edit().putBoolean(KEY_PROTECTION_ARMED, value).apply()
+            _protectionArmedFlow.value = value
+        }
 
     var isGuardActive: Boolean
         get() = prefs.getBoolean(KEY_GUARD_ACTIVE, false)
@@ -432,25 +444,12 @@ class FocusGuardPrefs(context: Context) {
         val calendar = Calendar.getInstance()
         val currentDay = calendar.get(Calendar.DAY_OF_WEEK)
         val currentMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
-        val hasActiveStudyBlock = studyBlocks.any { block ->
-            block.enabled && isBlockActiveNow(block, currentDay, currentMinutes)
-        }
-        if (prefs.contains(KEY_STUDY_BLOCKS_JSON)) return hasActiveStudyBlock
-        if (hasActiveStudyBlock) return true
-        val startMinutes = scheduleStartHour * 60 + scheduleStartMinute
-        val endMinutes = scheduleEndHour * 60 + scheduleEndMinute
-
-        return if (startMinutes == endMinutes) {
-            currentDay in scheduleDays
-        } else if (startMinutes < endMinutes) {
-            // Normal schedule: e.g., 9:00 AM (540) → 9:00 PM (1260)
-            currentDay in scheduleDays && currentMinutes in startMinutes until endMinutes
-        } else {
-            // Overnight schedule: e.g., 10:00 PM (1320) → 6:00 AM (360)
-            val previousDay = if (currentDay == Calendar.SUNDAY) Calendar.SATURDAY else currentDay - 1
-            (currentDay in scheduleDays && currentMinutes >= startMinutes) ||
-                (previousDay in scheduleDays && currentMinutes < endMinutes)
-        }
+        return ScheduleEvaluator.isWithinSchedule(
+            scheduleEnabled = true,
+            blocks = studyBlocks,
+            dayOfWeek = currentDay,
+            minuteOfDay = currentMinutes
+        )
     }
 
     /**
@@ -468,28 +467,12 @@ class FocusGuardPrefs(context: Context) {
         val calendar = Calendar.getInstance()
         val currentDay = calendar.get(Calendar.DAY_OF_WEEK)
         val currentMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
-        return studyBlocks.firstOrNull { block ->
-            block.enabled && isBlockActiveNow(block, currentDay, currentMinutes)
-        }
-    }
-
-    private fun isBlockActiveNow(
-        block: StudyBlockSchedule,
-        currentDay: Int,
-        currentMinutes: Int
-    ): Boolean {
-        val startMinutes = block.startHour * 60 + block.startMinute
-        val endMinutes = block.endHour * 60 + block.endMinute
-
-        return if (startMinutes == endMinutes) {
-            currentDay in block.days
-        } else if (startMinutes < endMinutes) {
-            currentDay in block.days && currentMinutes in startMinutes until endMinutes
-        } else {
-            val previousDay = if (currentDay == Calendar.SUNDAY) Calendar.SATURDAY else currentDay - 1
-            (currentDay in block.days && currentMinutes >= startMinutes) ||
-                (previousDay in block.days && currentMinutes < endMinutes)
-        }
+        return ScheduleEvaluator.getActiveBlock(
+            scheduleEnabled = true,
+            blocks = studyBlocks,
+            dayOfWeek = currentDay,
+            minuteOfDay = currentMinutes
+        )
     }
 
     private fun readStudyBlocks(): List<StudyBlockSchedule> {

@@ -33,7 +33,7 @@ import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,10 +44,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.focusguard.app.FocusGuardApp
 import com.focusguard.app.antibypass.PermissionMonitor
 import com.focusguard.app.ui.components.GlassCard
@@ -55,30 +58,36 @@ import com.focusguard.app.ui.components.GradientButton
 import com.focusguard.app.ui.components.PremiumIconButton
 import com.focusguard.app.ui.components.SectionHeader
 import com.focusguard.app.ui.theme.FrictionColors
-import kotlinx.coroutines.delay
+import com.focusguard.app.ui.theme.GlassTokens
 
 @Composable
 fun PermissionsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val permissionMonitor = remember { PermissionMonitor(context) }
 
-    var accessibilityEnabled by remember { mutableStateOf(false) }
-    var overlayEnabled by remember { mutableStateOf(false) }
-    var usageStatsEnabled by remember { mutableStateOf(false) }
-    var batteryProtected by remember { mutableStateOf(false) }
-    var notificationsEnabled by remember { mutableStateOf(false) }
+    var accessibilityEnabled by remember { mutableStateOf(permissionMonitor.isAccessibilityEnabled()) }
+    var overlayEnabled by remember { mutableStateOf(permissionMonitor.isOverlayPermitted()) }
+    var usageStatsEnabled by remember { mutableStateOf(permissionMonitor.isUsageStatsPermitted()) }
+    var batteryProtected by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
+    var notificationsEnabled by remember {
+        mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
+    }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            accessibilityEnabled = permissionMonitor.isAccessibilityEnabled()
-            overlayEnabled = permissionMonitor.isOverlayPermitted()
-            usageStatsEnabled = permissionMonitor.isUsageStatsPermitted()
-            batteryProtected = isIgnoringBatteryOptimizations(context)
-            notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
-            delay(2_000)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                accessibilityEnabled = permissionMonitor.isAccessibilityEnabled()
+                overlayEnabled = permissionMonitor.isOverlayPermitted()
+                usageStatsEnabled = permissionMonitor.isUsageStatsPermitted()
+                batteryProtected = isIgnoringBatteryOptimizations(context)
+                notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val allCoreReady = accessibilityEnabled
@@ -123,6 +132,7 @@ fun PermissionsScreen(
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 cornerRadius = 24.dp,
+                accentColor = GlassTokens.Accents.AppBlocking,
                 isActive = allCoreReady
             ) {
                 Column(
@@ -313,6 +323,7 @@ private fun PermissionInfoCard(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 22.dp,
+        accentColor = if (isGranted) GlassTokens.Accents.ProgressStats else GlassTokens.Accents.AppBlocking,
         isActive = isGranted
     ) {
         Column(
@@ -464,7 +475,7 @@ private fun openAutoStartSettings(context: android.content.Context) {
     if (!opened) {
         Toast.makeText(
             context,
-            "Phone Manager me Auto Launch ya Auto Start dhundo.",
+            "Open your device Phone Manager / Settings and enable Auto Launch or Auto Start for Focus Guard.",
             Toast.LENGTH_LONG
         ).show()
     }

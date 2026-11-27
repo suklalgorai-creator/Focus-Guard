@@ -92,12 +92,19 @@ class UsageRepository(
 
     suspend fun recordBlockedSession(packageName: String) {
         if (!isDistractingPackage(packageName)) return
+        recordBlockedEntry(statsPackage = packageName)
+    }
 
+    suspend fun recordBlockedSurface(packageName: String) {
+        recordBlockedEntry(statsPackage = packageName)
+    }
+
+    private suspend fun recordBlockedEntry(statsPackage: String) {
         writeMutex.withLock {
             val now = System.currentTimeMillis()
             val dateKey = dateKey(now)
             val average = usageDao.getAverageSessionDuration(
-                packageName = packageName,
+                packageName = statsPackage,
                 sinceMs = now - HISTORY_WINDOW_MS,
                 minDurationMs = MIN_VALID_SESSION_MS
             )

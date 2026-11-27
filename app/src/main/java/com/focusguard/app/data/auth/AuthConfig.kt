@@ -7,8 +7,11 @@ data class AuthConfig(
     val supabaseAnonKey: String,
     val googleWebClientId: String
 ) {
+    val isHttpsSupabaseUrl: Boolean
+        get() = normalizedSupabaseUrl.startsWith("https://", ignoreCase = true)
+
     val isConfigured: Boolean
-        get() = supabaseUrl.isNotBlank() &&
+        get() = isHttpsSupabaseUrl &&
             supabaseAnonKey.isNotBlank() &&
             googleWebClientId.isNotBlank()
 

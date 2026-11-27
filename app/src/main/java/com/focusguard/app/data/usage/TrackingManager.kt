@@ -66,6 +66,22 @@ class TrackingManager(
         }
     }
 
+    @Synchronized
+    fun onBlockedSurface(blockKey: String, packageName: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (blockKey == lastBlockedPackage && now - lastBlockedAtElapsedMs < BLOCK_EVENT_COOLDOWN_MS) {
+            return
+        }
+
+        lastBlockedPackage = blockKey
+        lastBlockedAtElapsedMs = now
+        Log.d(TAG, "Blocked surface recorded trigger: $blockKey")
+
+        scope.launch {
+            usageRepository.recordBlockedSurface(packageName)
+        }
+    }
+
     fun flushCurrentSession() {
         scope.launch {
             sessionMutex.withLock {

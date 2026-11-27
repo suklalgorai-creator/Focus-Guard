@@ -27,117 +27,106 @@ import com.focusguard.app.data.settings.SettingsRepository
 import com.focusguard.app.data.usage.TrackingManager
 import com.focusguard.app.data.usage.UsageRepository
 import com.focusguard.app.data.usage.UsageStatsReconciler
+import com.focusguard.app.friction.tasks.QuestionRepository
 import com.focusguard.app.persistence.FocusGuardDatabase
 import com.focusguard.app.persistence.FocusGuardPrefs
-import com.focusguard.app.friction.tasks.QuestionRepository
 import com.focusguard.app.service.ServiceHealthWorker
 import com.focusguard.app.service.SmartNotificationWorker
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Application class for Focus Guard.
- * Initializes persistence, notification channels, and pre-warms overlay resources.
+ * Keeps main-thread cold start minimal by lazily constructing repositories and
+ * deferring JSON asset loading and WorkManager scheduling to [Dispatchers.IO].
  */
 class FocusGuardApp : Application() {
 
-    lateinit var database: FocusGuardDatabase
-        private set
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    val database: FocusGuardDatabase by lazy { FocusGuardDatabase.getInstance(this) }
     lateinit var prefs: FocusGuardPrefs
-        private set
-    lateinit var settingsRepository: SettingsRepository
-        private set
-    lateinit var profileRepository: ProfileRepository
-        private set
-    lateinit var pyqRepository: PyqRepository
-        private set
-    lateinit var behaviorRepository: BehaviorRepository
-        private set
-    lateinit var pyqSelectorRepository: PyqSelectorRepository
-        private set
-    lateinit var smartNotificationRepository: SmartNotificationRepository
-        private set
-    lateinit var analyticsRepository: AnalyticsRepository
-        private set
-    lateinit var authRepository: AuthRepository
-        private set
-    lateinit var focusSessionRepository: FocusSessionRepository
-        private set
-    lateinit var blockingManager: BlockingManager
-        private set
-    lateinit var usageRepository: UsageRepository
-        private set
-    lateinit var usageStatsReconciler: UsageStatsReconciler
-        private set
-    lateinit var trackingManager: TrackingManager
         private set
     lateinit var antiBypassManager: AntiBypassManager
         private set
+    lateinit var blockingManager: BlockingManager
+        private set
 
-    override fun onCreate() {
-        super.onCreate()
-        instance = this
-
-        // Initialize persistence
-        database = FocusGuardDatabase.getInstance(this)
-        prefs = FocusGuardPrefs(this)
-        antiBypassManager = AntiBypassManager(this, prefs)
-        prefs.migrateFocusedSurfaceDefaultsIfNeeded()
-        blockingManager = BlockingManager(this, prefs)
-        usageRepository = UsageRepository(
-            context = this,
-            usageDao = database.appUsageDao(),
-            prefs = prefs
-        )
-        usageStatsReconciler = UsageStatsReconciler(
-            context = this,
-            prefs = prefs,
-            usageRepository = usageRepository
-        )
-        trackingManager = TrackingManager(
-            context = this,
-            prefs = prefs,
-            usageRepository = usageRepository
-        )
-        settingsRepository = SettingsRepository(
+    val settingsRepository: SettingsRepository by lazy {
+        SettingsRepository(
             settingsDataStore = SettingsDataStore(this),
             legacyPrefs = prefs
         )
-        profileRepository = ProfileRepository.default(
+    }
+    val profileRepository: ProfileRepository by lazy {
+        ProfileRepository.default(
             profileDataStore = ProfileDataStore(this),
             legacyPrefs = prefs,
             questionRepositoryContext = this
         )
-
-        // Initialize question database
-        QuestionRepository.initialize(this, prefs.targetExam)
-
-        pyqRepository = PyqRepository(
+    }
+    val usageRepository: UsageRepository by lazy {
+        UsageRepository(
+            context = this,
+            usageDao = database.appUsageDao(),
+            prefs = prefs
+        )
+    }
+    val usageStatsReconciler: UsageStatsReconciler by lazy {
+        UsageStatsReconciler(
+            context = this,
+            prefs = prefs,
+            usageRepository = usageRepository
+        )
+    }
+    val trackingManager: TrackingManager by lazy {
+        TrackingManager(
+            context = this,
+            prefs = prefs,
+            usageRepository = usageRepository
+        )
+    }
+    val pyqRepository: PyqRepository by lazy {
+        PyqRepository(
             attemptDao = database.pyqAttemptDao(),
             questionSource = JsonPyqQuestionSource()
         )
-        behaviorRepository = BehaviorRepository(
+    }
+    val behaviorRepository: BehaviorRepository by lazy {
+        BehaviorRepository(
             prefs = prefs,
             attemptDao = database.pyqAttemptDao(),
             pyqRepository = pyqRepository
         )
-        pyqSelectorRepository = PyqSelectorRepository(
+    }
+    val pyqSelectorRepository: PyqSelectorRepository by lazy {
+        PyqSelectorRepository(
             attemptDao = database.pyqAttemptDao(),
             pyqRepository = pyqRepository,
             behaviorRepository = behaviorRepository,
             questionSource = JsonPyqQuestionSource()
         )
-        analyticsRepository = AnalyticsRepository(
+    }
+    val analyticsRepository: AnalyticsRepository by lazy {
+        AnalyticsRepository(
             attemptDao = database.pyqAttemptDao(),
             pyqRepository = pyqRepository,
             behaviorRepository = behaviorRepository
         )
-        focusSessionRepository = FocusSessionRepository(
+    }
+    val focusSessionRepository: FocusSessionRepository by lazy {
+        FocusSessionRepository(
             prefs = prefs,
             settingsRepository = settingsRepository,
             analyticsRepository = analyticsRepository
         )
+    }
+    val authRepository: AuthRepository by lazy {
         val authConfig = AuthConfig.fromBuildConfig()
-        authRepository = AuthRepository(
+        AuthRepository(
             config = authConfig,
             sessionStore = AuthSessionStore(this),
             googleAuthManager = GoogleAuthManager(authConfig),
@@ -145,22 +134,36 @@ class FocusGuardApp : Application() {
             prefs = prefs,
             analyticsRepository = analyticsRepository
         )
-        smartNotificationRepository = SmartNotificationRepository(
+    }
+    val smartNotificationRepository: SmartNotificationRepository by lazy {
+        SmartNotificationRepository(
             context = this,
             pyqRepository = pyqRepository,
             behaviorRepository = behaviorRepository
         )
+    }
 
-        // Create notification channels
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+
+        prefs = FocusGuardPrefs(this)
+        antiBypassManager = AntiBypassManager(this, prefs)
+        blockingManager = BlockingManager(this, prefs)
         createNotificationChannels()
-        scheduleSmartNotifications()
-        scheduleServiceHealthWorker()
+
+        // Defer JSON asset parsing, preference migrations, and WorkManager IPC off the main thread.
+        appScope.launch {
+            prefs.migrateFocusedSurfaceDefaultsIfNeeded()
+            QuestionRepository.initialize(this@FocusGuardApp, prefs.targetExam)
+            scheduleSmartNotifications()
+            scheduleServiceHealthWorker()
+        }
     }
 
     private fun createNotificationChannels() {
         val manager = getSystemService(NotificationManager::class.java)
 
-        // Foreground service channel
         val serviceChannel = NotificationChannel(
             CHANNEL_SERVICE,
             "Focus Guard Service",
@@ -170,7 +173,6 @@ class FocusGuardApp : Application() {
             setShowBadge(false)
         }
 
-        // Alert channel (permission warnings, bypass attempts)
         val alertChannel = NotificationChannel(
             CHANNEL_ALERTS,
             "Guard Alerts",
